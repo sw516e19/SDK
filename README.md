@@ -1,8 +1,9 @@
-Repository with API for EV3RT (http://ev3rt-git.github.io/)
+# sw516e19 SDK
+
+SDK used for developing apps for EV3RT.
 
 # Build status 
-repository ev3rt-hrp2-sdk 
 
 Status               | Platform
 --------------       | ------ 
-[![Build Status](https://travis-ci.org/ev3rt-git/ev3rt-hrp2-sdk.svg?branch=master)](https://travis-ci.org/ev3rt-git/ev3rt-hrp2-sdk) | Ubuntu 14.04
+[![Build Status](https://travis-ci.org/sw516e19/SDK.svg?branch=master)](https://travis-ci.org/sw516e19/SDK) | Ubuntu 18.04
