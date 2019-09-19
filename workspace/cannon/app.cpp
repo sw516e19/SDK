@@ -10,6 +10,8 @@
 #include "app.h"
 
 #include "libcpp-test.h"
+#include "Clock.h"
+#include "Motor.h"
 
 #define DEBUG
 
@@ -20,27 +22,36 @@
 #endif
 
 class TestClass {
+
+    int member;
+
 public:
-    TestClass()
-    {
+    TestClass() {
         member = 0x12345678;
     }
 
-    void testMethod()
-    {
+    void test_method() {
         static char buf[256];
         sprintf(buf, "Member is 0x%08x.", member);
         ev3_lcd_draw_string(buf, 0, 32);
     }
-private:
-    int member;
 };
 
 auto obj2 = new TestClass();
 
 void main_task(intptr_t unused) {
+
+    motor_type_t type = LARGE_MOTOR;
+
+    ev3api::Motor test(ePortM::PORT_A);
+
+
+
+
+
+/*
     // Test global constructor
-    obj2->testMethod();
+    obj2->test_method();
 
     // Test function in static library
     libcpp_test_c_echo_function(777);
@@ -48,6 +59,5 @@ void main_task(intptr_t unused) {
     // Test class in static library
     LibSampleClass a;
     a.draw();
-
-    //auto obj = new TestClass();
+*/
 }
