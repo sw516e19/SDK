@@ -523,3 +523,31 @@ error_exit:
 	return false;
 }
 
+void pixycam2_get_blocks(sensor_port_t, pixycam_2_block *dest){
+	ER ercd;
+
+	CHECK_PORT(port);
+	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
+	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
+
+	ercd = start_i2c_transaction(port, 0x54, "\xAE\xC1\xE\x00", 4, 13); //Change to color connected components
+
+	assert(ercd == E_OK);
+
+	while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
+
+	if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
+    {
+        
+
+        
+    }
+
+	return;
+
+error_exit:
+	syslog(LOG_WARNING, "%s(): ercd %d", __FUNCTION__, ercd);
+
+}
+
+
