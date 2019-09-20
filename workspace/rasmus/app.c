@@ -37,19 +37,19 @@ void main_task(intptr_t unused){
     //pixycam_get_blocks(&req, &resp);
     
     FILE *file = ev3_serial_open_file(EV3_SERIAL_UART);
-
-    fwrite(&req, sizeof(pixycam2_get_blocks_request), 1, file);
+    
+    //fwrite(&req, sizeof(pixycam2_get_blocks_request), 1, file);
 
     long size = 0; 
     
+    
+
     do{
 
         fseek(file, 0, SEEK_END);
         size = ftell(file);
         rewind(file);
         ev3_lcd_draw_string("checking file length...", 0, 0);
-        tslp_tsk(1);
-
     }while(!size);
     
 

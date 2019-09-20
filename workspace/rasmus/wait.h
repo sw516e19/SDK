@@ -1,4 +1,6 @@
 
-void wait(int milis);
+#include <time.h>
+
+void wait(unsigned int milliseconds);
 
 
