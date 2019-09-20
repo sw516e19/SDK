@@ -2,14 +2,14 @@
 #include "app.h"
 
 #include "libcpp-test.h"
-//#include "Clock.h"
-//#include "Motor.h"
 
 #include <t_stddef.h>
 #include <t_syslog.h>
 #include <string.h>
 #include "platform_interface_layer.h"
 #include "api_common.h"
+
+#define CHECK_PORT(port) CHECK_COND((port) >= EV3_PORT_1 && (port) <= EV3_PORT_4, E_ID)
 
 #define DEBUG
 
@@ -46,6 +46,39 @@ static const analog_data_t *pAnalogSensorData = NULL;
 static const i2c_data_t *pI2CSensorData = NULL;
 
 
+bool_t pixycam_test(sensor_port_t port) {
+	ER ercd;
+
+    ev3_lcd_draw_string("3", 0, 0);
+
+	CHECK_PORT(port);
+	//CHECK_COND(ev3_sensor_get_type(port) == HT_NXT_ACCEL_SENSOR, E_OBJ);
+	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
+
+    ev3_lcd_draw_string("4", 0, 0);
+
+	ercd = start_i2c_transaction(port, 0x54, "\xAE\xC1\xE\x00", 4, 13);
+
+    ev3_lcd_draw_string("5", 0, 0);
+
+	assert(ercd == E_OK);
+
+    ev3_lcd_draw_string("6", 0, 0);
+
+    tslp_tsk(1000);
+
+    if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
+    {
+        ev3_lcd_draw_string("7", 0, 0);
+    }    
+
+	return true;
+
+error_exit:
+	syslog(LOG_WARNING, "%s(): ercd %d", __FUNCTION__, ercd);
+	return false;
+}
+
 
 
 
@@ -54,16 +87,23 @@ void main_task(intptr_t unused) {
     ev3_lcd_set_font(EV3_FONT_MEDIUM);
 
 
-    ev3_lcd_draw_string("HELLO WORLD", 0, 0);
-    sprintf("awer", 0, 0);
+    ev3_lcd_draw_string("1", 0, 0);
 
     brickinfo_t brickinfo;
     ER ercd = fetch_brick_info(&brickinfo);
     pUartSensorData = brickinfo.uart_sensors;
     pAnalogSensorData = brickinfo.analog_sensors;
     pI2CSensorData = brickinfo.i2c_sensors;
+    assert(pUartSensorData != NULL);
+    assert(pAnalogSensorData != NULL);
+    assert(pI2CSensorData != NULL);
 
-    ev3_lcd_draw_string("SWAG", 0, 0);
+    ev3_lcd_draw_string("2", 0, 0);
+
+    pixycam_test(EV3_PORT_1);
+
+
+
 
 
 
