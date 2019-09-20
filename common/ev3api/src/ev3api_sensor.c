@@ -523,14 +523,32 @@ error_exit:
 	return false;
 }
 
-void pixycam2_get_blocks(sensor_port_t, pixycam_2_block *dest){
+typedef struct{
+
+	char sync[2];
+	uint8_t packet_type;
+	uint8_t payload_length;
+	uint8_t signature;
+	uint8_t blocks;
+
+} pixycam2_request;
+
+void pixycam2_get_blocks(sensor_port_t port, pixycam_2_block *dest, uint8_t signature, uint8_t blocks){
 	ER ercd;
+	pixycam2_request req;
+
+	req.sync[0] = 0xC1;
+	req.sync[1] = 0xAE;
+	req.packet_type = 32;
+	req.payload_length = 2;
+	req.signature = signature;
+	req.blocks = blocks;
 
 	CHECK_PORT(port);
 	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
 	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
 
-	ercd = start_i2c_transaction(port, 0x54, "\xAE\xC1\xE\x00", 4, 13); //Change to color connected components
+	ercd = start_i2c_transaction(port, 0x54, &req, 6, 20);//"\xAE\xC1\xE\x00", 4, 13); //
 
 	assert(ercd == E_OK);
 
@@ -538,9 +556,7 @@ void pixycam2_get_blocks(sensor_port_t, pixycam_2_block *dest){
 
 	if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
     {
-        
-
-        
+		dest = pI2CSensorData[port].raw;
     }
 
 	return;
