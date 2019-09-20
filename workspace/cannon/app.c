@@ -65,12 +65,21 @@ bool_t pixycam_test(sensor_port_t port) {
 
     ev3_lcd_draw_string("6", 0, 0);
 
-    tslp_tsk(1000);
+    // spin while waiting for i2c to be idle again
+    while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
 
     if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
     {
-        ev3_lcd_draw_string("7", 0, 0);
-    }    
+        char test[2];
+
+        test[0] = pI2CSensorData[port].raw[0];
+
+        sprintf(test, "%x", pI2CSensorData[port].raw[0]);
+
+        ev3_lcd_draw_string(test, 0, 0);
+
+        //ev3_lcd_draw_string("7", 0, 0);
+    }
 
 	return true;
 
