@@ -125,6 +125,10 @@ ER ev3_sensor_config(sensor_port_t port, sensor_type_t type) {
     	assert(ercd == E_OK);
         break;
 
+	case PIXYCAM_2:
+		//Nothing to do here at the moment
+		break;
+
 	default:
 		API_ERROR("Invalid sensor type %d", type);
 		return E_PAR;
