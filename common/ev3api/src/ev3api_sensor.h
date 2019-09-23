@@ -443,7 +443,6 @@ typedef struct{
  * \param port   Sensor port to be inquired
  * \param val    Pointer to store block information
  * */
-
 void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block *dest, uint8_t signature, uint8_t blocks);
 
 /**
