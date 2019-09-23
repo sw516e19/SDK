@@ -47,25 +47,25 @@ static const i2c_data_t *pI2CSensorData = NULL;
 
 
 bool_t pixycam_test(sensor_port_t port) {
-	ER ercd;
+    ER ercd;
 
     ev3_lcd_draw_string("3", 0, 0);
 
-	CHECK_PORT(port);
-	//CHECK_COND(ev3_sensor_get_type(port) == HT_NXT_ACCEL_SENSOR, E_OBJ);
-	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
+    CHECK_PORT(port);
+    //CHECK_COND(ev3_sensor_get_type(port) == HT_NXT_ACCEL_SENSOR, E_OBJ);
+    CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
 
     ev3_lcd_draw_string("4", 0, 0);
 
-	ercd = start_i2c_transaction(port, 0x54, "\xAE\xC1\xE\x00", 4, 13);
+    ercd = start_i2c_transaction(port, 0x54, "\xAE\xC1\xE\x00", 4, 13);
 
     ev3_lcd_draw_string("5", 0, 0);
 
-	assert(ercd == E_OK);
+    assert(ercd == E_OK);
 
     ev3_lcd_draw_string("6", 0, 0);
 
-    // spin while waiting for i2c to be idle again
+    // spin while waiting for i2c to be idle again. never use busy wait, switch this to something more efficient.
     while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
 
     if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
@@ -81,11 +81,11 @@ bool_t pixycam_test(sensor_port_t port) {
         //ev3_lcd_draw_string("7", 0, 0);
     }
 
-	return true;
+    return true;
 
 error_exit:
-	syslog(LOG_WARNING, "%s(): ercd %d", __FUNCTION__, ercd);
-	return false;
+    syslog(LOG_WARNING, "%s(): ercd %d", __FUNCTION__, ercd);
+    return false;
 }
 
 
