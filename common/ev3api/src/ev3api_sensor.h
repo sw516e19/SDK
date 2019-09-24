@@ -421,10 +421,13 @@ bool_t nxt_temp_sensor_measure(sensor_port_t port, float *temp);
 
 typedef struct{
 
-    uint16_t sync;
-    uint8_t packet_type;
-    uint8_t payload_length;
-    short checksum;
+	uint16_t sync;
+	uint8_t packet_type;
+	uint8_t payload_length;
+
+} pixycam2_header;
+
+typedef struct{
     short signature;
     unsigned short x_center;
     unsigned short y_center;
@@ -436,6 +439,15 @@ typedef struct{
 
 } pixycam_2_block;
 
+typedef struct{
+    pixycam2_header header;
+    short checksum;
+
+    pixycam_2_block *blocks;
+
+} pixycam_2_block_response;
+
+
 /**
  * \~English
  * \brief        Get blocks detected by the pixycam2.
@@ -443,7 +455,7 @@ typedef struct{
  * \param port   Sensor port to be inquired
  * \param val    Pointer to store block information
  * */
-void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block *dest, uint8_t signature, uint8_t blocks);
+void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block_response *dest, uint8_t signature, uint8_t blocks);
 
 /**
  * @} // End of group
