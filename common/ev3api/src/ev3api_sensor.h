@@ -421,7 +421,7 @@ bool_t nxt_temp_sensor_measure(sensor_port_t port, float *temp);
 
 typedef struct{
 
-    char sync[2];
+    uint16_t sync;
     uint8_t packet_type;
     uint8_t payload_length;
     short checksum;

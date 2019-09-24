@@ -529,7 +529,7 @@ error_exit:
 
 typedef struct{
 
-	char sync[2];
+	uint16_t sync;
 	uint8_t packet_type;
 	uint8_t payload_length;
 	uint8_t signature;
@@ -537,12 +537,11 @@ typedef struct{
 
 } pixycam2_request;
 
-void pixycam2_get_blocks(sensor_port_t port, pixycam_2_block *dest, uint8_t signature, uint8_t blocks){
+void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block *dest, uint8_t signature, uint8_t blocks){
 	ER ercd;
 	pixycam2_request req;
 
-	req.sync[0] = 0xC1;
-	req.sync[1] = 0xAE;
+	req.sync = 0xc1ae;
 	req.packet_type = 32;
 	req.payload_length = 2;
 	req.signature = signature;
@@ -552,7 +551,7 @@ void pixycam2_get_blocks(sensor_port_t port, pixycam_2_block *dest, uint8_t sign
 	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
 	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
 
-	ercd = start_i2c_transaction(port, 0x54, &req, 6, 20);//"\xAE\xC1\xE\x00", 4, 13); //
+	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request), sizeof(pixycam_2_block));//"\xAE\xC1\xE\x00", 4, 13); //
 
 	assert(ercd == E_OK);
 

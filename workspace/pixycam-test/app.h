@@ -15,7 +15,7 @@
 #define	STACK_SIZE		4096		/* タスクのスタックサイズ */
 #endif /* STACK_SIZE */
 
-//#include "ev3api.h" 
+#include "ev3api.h" 
 
 extern void main_task(intptr_t unused); 
 
