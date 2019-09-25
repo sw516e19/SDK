@@ -125,6 +125,10 @@ ER ev3_sensor_config(sensor_port_t port, sensor_type_t type) {
     	assert(ercd == E_OK);
         break;
 
+	case PIXYCAM_2:
+		//Nothing to do here at the moment
+		break;
+
 	default:
 		API_ERROR("Invalid sensor type %d", type);
 		return E_PAR;
@@ -522,4 +526,53 @@ error_exit:
 	syslog(LOG_WARNING, "%s(): ercd %d", __FUNCTION__, ercd);
 	return false;
 }
+
+
+
+typedef struct{
+
+	pixycam2_header header;
+	uint8_t signature;
+	uint8_t blocks;
+
+} pixycam2_request_get_blocks;
+
+void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block_response *dest, uint8_t signature, uint8_t blocks){
+	ER ercd;
+	pixycam2_request_get_blocks req;
+
+	req.header.sync = 0xc1ae;
+	req.header.packet_type = 32;
+	req.header.payload_length = 2;
+	req.signature = signature;
+	req.blocks = blocks;
+
+	CHECK_PORT(port);
+	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
+	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
+
+	int exp_size = blocks > 1 ? 32 : (sizeof(pixycam2_header) + sizeof(short)) + (sizeof(pixycam_2_block) * blocks);
+
+	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks), exp_size);
+	//TODO: Well, the actual size should be: '(sizeof(pixycam2_header) + sizeof(short)) + (sizeof(pixycam_2_block) * blocks)'
+	//but due to i2c limitations, the max payload is 32 bytes (But sadly that's including the header)
+	//"\xAE\xC1\xE\x00", 4, 13); //
+
+	assert(ercd == E_OK);
+
+	while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
+
+	if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
+    {
+		memcpy(dest, pI2CSensorData[port].raw, sizeof(pixycam2_header) + sizeof(short));
+		memcpy(dest->blocks, &(pI2CSensorData[port].raw[sizeof(pixycam2_header) + sizeof(short)]), dest->header.payload_length);
+    }
+
+	return;
+
+error_exit:
+	syslog(LOG_WARNING, "%s(): ercd %d", __FUNCTION__, ercd);
+
+}
+
 
