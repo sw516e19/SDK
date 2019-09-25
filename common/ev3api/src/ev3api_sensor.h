@@ -453,7 +453,9 @@ typedef struct{
  * \brief        Get blocks detected by the pixycam2.
  * \details      When an invalid sensor support number is specified, always returns false (error log is output)
  * \param port   Sensor port to be inquired
- * \param val    Pointer to store block information
+ * \param dest    Pointer to store block information
+ * \param signature The Color signatures to look for, specified by byte level values, eg. 1000 0000 is sig 1, 0010 0000 is signature 3
+ * \param blocks The amount of blocks to track. Due to I2C limitations, 2 blocks is max and second block will not have tracking_index and age specified  
  * */
 void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block_response *dest, uint8_t signature, uint8_t blocks);
 
