@@ -50,6 +50,7 @@ typedef enum {
 	HT_NXT_ACCEL_SENSOR, //!< \~English HiTechnic NXT acceleration sensor \~Japanese 加速度センサ（HiTechnic社製）
 	HT_NXT_COLOR_SENSOR, //!< \~English HiTechnic NXT color sensor        \~Japanese カラーセンサ（HiTechnic社製）
 	NXT_TEMP_SENSOR,     //!< \~English NXT temperature sensor            \~Japanese NXT温度センサ
+    PIXYCAM_2,           //!< \~English PixyCam 2
     TNUM_SENSOR_TYPE     //!< \~English Number of sensor types 			  \~Japanese センサタイプの数
 } sensor_type_t;
 
@@ -417,6 +418,46 @@ bool_t ht_nxt_color_sensor_measure_rgb(sensor_port_t port, rgb_raw_t *val);
  * \retval false tempは変更されなかった（前回のI2C操作が完成していない）
  */
 bool_t nxt_temp_sensor_measure(sensor_port_t port, float *temp);
+
+typedef struct{
+
+	uint16_t sync;
+	uint8_t packet_type;
+	uint8_t payload_length;
+
+} pixycam2_header;
+
+typedef struct{
+    short signature;
+    unsigned short x_center;
+    unsigned short y_center;
+    unsigned short width;
+    unsigned short height;
+    short color_angle;
+    uint8_t tracking_index;
+    uint8_t age;
+
+} pixycam_2_block;
+
+typedef struct{
+    pixycam2_header header;
+    short checksum;
+
+    pixycam_2_block *blocks;
+
+} pixycam_2_block_response;
+
+
+/**
+ * \~English
+ * \brief        Get blocks detected by the pixycam2.
+ * \details      When an invalid sensor support number is specified, always returns false (error log is output)
+ * \param port   Sensor port to be inquired
+ * \param dest    Pointer to store block information
+ * \param signature The Color signatures to look for, specified by byte level values, eg. 1000 0000 is sig 1, 0010 0000 is signature 3
+ * \param blocks The amount of blocks to track. Due to I2C limitations, 2 blocks is max and second block will not have tracking_index and age specified  
+ * */
+void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block_response *dest, uint8_t signature, uint8_t blocks);
 
 /**
  * @} // End of group
