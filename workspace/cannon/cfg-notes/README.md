@@ -1,11 +1,5 @@
 # CFG notes
 
----
-
-[TOC]
-
----
-
 ## Domain
 
 `DOMAIN(id){args}`
@@ -274,6 +268,6 @@ Creates an interrupt handler (**INH**) with the properties
 
 [sac_mem at Renesas](http://tool-support.renesas.com/autoupdate/support/onlinehelp/csp/V7.00.00/CS+.chm/Coding-RI600PX.chm/Output/srv_sac_mem.html) TACP / ACPTN var == access permission pattern
 
-[Obscure Japanese Lecture on Toppers](https://www.toppers.jp/docs/etrobo15/ev3rt_seminar_04.pdf)
+[Obscure Japanese Beamer Presentation on Toppers](https://www.toppers.jp/docs/etrobo15/ev3rt_seminar_04.pdf)
 
 [µITRON Docs](https://www.tron.org/wp-content/themes/dp-magjam/pdf/specifications/en_US/WG024-S001-04.03.00_en.pdf)
