@@ -12,31 +12,36 @@ void main_task(intptr_t unused) {
 
     ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
 
-    pixycam_2_block blocks[2];
-    pixycam_2_block_response response;
+    uint8_t NUM_BLOCKS = 2;
+
+    pixycam2_block_t blocks[NUM_BLOCKS];
+    pixycam2_block_response_t response;
     response.blocks = blocks;
     char block_1_coords[20];
     char block_2_coords[20];
-    char payload_buf[20];
-    int counter = 0;
+    block_signature_t signatures = SIGNATURE_1 + SIGNATURE_2 + SIGNATURE_3 + SIGNATURE_4;
 
     while(1){
-        
 
-        pixycam_2_get_blocks(EV3_PORT_1, &response, 3, 2);
+        pixycam_2_get_blocks(EV3_PORT_1, &response, signatures, NUM_BLOCKS);
 
         unsigned int val = response.header.payload_length == 0 ? 0 : (response.header.payload_length / 14);
 
         //sprintf(&payload_buf, "%u    ", val);
 
         if(val > 0){
-            sprintf(&block_1_coords, "co: %u,%u s: %d     ", response.blocks[0].x_center, response.blocks[0].y_center, blocks[0].signature);
+            sprintf(&block_1_coords, "co: %u,%u s: %d     ", response.blocks[0].x_center, response.blocks[0].y_center, response.blocks[0].signature);
             ev3_lcd_draw_string(block_1_coords, 0, 0);
+        } else {
+            ev3_lcd_fill_rect(0, 0, EV3_LCD_WIDTH, 15, COLOR_WHITE);
+
         }
 
         if(val > 1){
-            sprintf(&block_2_coords, "co: %u %u s: %d     ", blocks[1].x_center, blocks[1].y_center, blocks[1].signature);
+            sprintf(&block_2_coords, "co: %u %u s: %d     ", response.blocks[1].x_center, response.blocks[1].y_center, response.blocks[1].signature);
             ev3_lcd_draw_string(block_2_coords, 0, 16);
+        } else {
+            ev3_lcd_fill_rect(0, 16, EV3_LCD_WIDTH, 31, COLOR_WHITE);
         }
 
         /*sprintf(&age_buf, "ind: %u age: %u   ", block.tracking_index, block.age);
@@ -56,10 +61,10 @@ void main_task(intptr_t unused) {
     ev3_lcd_draw_string("Done         ", 0, EV3_LCD_HEIGHT/2);
 
 }
-
+/*
 typedef struct{
 
-    pixycam2_header header;
+    pixycam2header header;
 	uint8_t signature;
 	uint8_t blocks;
 
@@ -103,12 +108,12 @@ void pixycam_2_uart_test(){
             ev3_lcd_draw_string(block_1_coords, 0, 16);
         }
 
-        /*if(val > 1){
+        /if(val > 1){
             sprintf(&block_2_coords, "co: %u %u s: %d     ", blocks[1].x_center, blocks[1].y_center, blocks[1].signature);
             ev3_lcd_draw_string(block_2_coords, 0, 32);
-        }*/
+        }
     }
-    
 
 }
+    */
 
