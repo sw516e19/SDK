@@ -555,17 +555,14 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
 
 	CHECK_PORT(port);
 	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
+	CHECK_COND(blocks <= 4, E_OBJ); //Max 4 objects with 64 byte I2C buffer
 	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
 
-	int exp_size = blocks > 1 ? 32 : (sizeof(pixycam2_response_header_t)) + (sizeof(pixycam2_block_response_t) * blocks);
+	uint_t readlen = 64; //Read entire 64 byte buffer
 
-	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), exp_size);
-	//TODO: Well, the actual size should be: '(sizeof(pixycam2_header) + sizeof(short)) + (sizeof(pixycam_2_block) * blocks)'
-	//but due to i2c limitations, the max payload is 32 bytes (But sadly that's including the header)
-	//"\xAE\xC1\xE\x00", 4, 13); //
+	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), readlen);
 
 	assert(ercd == E_OK);
-	
 
 
 	while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
