@@ -571,10 +571,10 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
 
 	if (raw[0] == 175 && raw[1] == 193) {
 
-		dest->header.sync           = (raw[0] << 8) | raw[1];
+		dest->header.sync           = (raw[1] << 8) | raw[0];
 		dest->header.packet_type    = raw[2];
 		dest->header.payload_length = raw[3];
-		dest->header.checksum       = (raw[4] << 8) | raw[5];
+		dest->header.checksum       = (raw[5] << 8) | raw[4];
 
 		uint8_t block_count = dest->header.payload_length / sizeof(pixycam2_block_t);
 
@@ -584,12 +584,12 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
 			pixycam2_block_t currentblock;
 			uint8_t offset = sizeof(pixycam2_block_t) * i;
 
-			currentblock.signature      = (raw[offset + 6] << 8) | raw[offset + 7];
-			currentblock.x_center       = (raw[offset + 8] << 8) | raw[offset + 9];
-			currentblock.y_center       = (raw[offset + 10] << 8) | raw[offset + 11];
-			currentblock.width          = (raw[offset + 12] << 8) | raw[offset + 13];
-			currentblock.height         = (raw[offset + 14] << 8) | raw[offset + 15];
-			currentblock.color_angle    = (raw[offset + 16] << 8) | raw[offset + 17];
+			currentblock.signature      = (raw[offset + 7] << 8) | raw[offset + 6];
+			currentblock.x_center       = (raw[offset + 9] << 8) | raw[offset + 8];
+			currentblock.y_center       = (raw[offset + 11] << 8) | raw[offset + 10];
+			currentblock.width          = (raw[offset + 13] << 8) | raw[offset + 12];
+			currentblock.height         = (raw[offset + 15] << 8) | raw[offset + 14];
+			currentblock.color_angle    = (raw[offset + 17] << 8) | raw[offset + 16];
 			currentblock.tracking_index = raw[offset + 18];
 			currentblock.age            = raw[offset + 19];
 
