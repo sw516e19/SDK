@@ -419,34 +419,68 @@ bool_t ht_nxt_color_sensor_measure_rgb(sensor_port_t port, rgb_raw_t *val);
  */
 bool_t nxt_temp_sensor_measure(sensor_port_t port, float *temp);
 
+/**
+ * \~English
+ * \brief Structure for the header of the response from the Pixy2 camera
+ */
 typedef struct{
+	uint16_t sync; //!< \~English Sync bytes
+	uint8_t packet_type; //!< \~English Packet type
+	uint8_t payload_length; //!< \~English Payload length
+    uint16_t checksum; //!< \~English Checksum (Sum of all bytes in payload)
 
-	uint16_t sync;
-	uint8_t packet_type;
-	uint8_t payload_length;
+} pixycam2_response_header_t;
 
-} pixycam2_header;
-
+/**
+ * \~English
+ * \brief Structure for the blocks from Pixy2 camera
+ */
 typedef struct{
-    short signature;
-    unsigned short x_center;
-    unsigned short y_center;
-    unsigned short width;
-    unsigned short height;
-    short color_angle;
-    uint8_t tracking_index;
-    uint8_t age;
+    uint16_t signature; //!< \~English Signature number / Color code number (0-255)
+    uint16_t x_center; //!< \~English X (center) of block in pixel (0-315)
+    uint16_t y_center; //!< \~English Y (center) of block in pixel (0-207)
+    uint16_t width; //!< \~English Width of block in pixel (0-316)
+    uint16_t height; //!< \~English Height of block in pixel (0-208)
+    int16_t color_angle; //!< \~English Angle of color-code in degrees (-180-180, 0 if not a color code)
+    uint8_t tracking_index; //!< \~English Tracking index of block (0-255)
+    uint8_t age; //!< \~English Number of frames this block has been tracked (0-255, stops incrementing at 255)
 
-} pixycam_2_block;
+} pixycam2_block_t;
 
+/**
+ * \~English
+ * \brief Structure for containing header and blocks from Pixy2 camera
+ */
 typedef struct{
-    pixycam2_header header;
-    short checksum;
+    pixycam2_response_header_t header; //!< \~English headerpackage
+    pixycam2_block_t *blocks; //!< \~English block-pointer
 
-    pixycam_2_block *blocks;
+} pixycam2_block_response_t;
 
-} pixycam_2_block_response;
+/**
+ * \~English
+ * \brief Enumeration type for signatures that can be detected by Pixy2 cam
+ * 
+ */
+typedef enum {
+    SIGNATURE_1 = 1, //!< \~English Signature 1
+    SIGNATURE_2 = 2, //!< \~English Signature 2
+    SIGNATURE_3 = 4, //!< \~English Signature 3
+    SIGNATURE_4 = 8, //!< \~English Signature 4
+    SIGNATURE_5 = 16, //!< \~English Signature 5
+    SIGNATURE_6 = 32, //!< \~English Signature 6
+    SIGNATURE_7 = 64, //!< \~English Signature 7
+    SIGNATURE_ALL = 255 //!< \~English All signatures
+} block_signature_t;
 
+/**
+ * \~English
+ * \brief   Returns the smallest of 2 uint8_t
+ * \param x First number
+ * \param y Second number
+ * \return  The smaller one of the two
+**/
+uint8_t min(uint8_t x, uint8_t y);
 
 /**
  * \~English
@@ -455,9 +489,9 @@ typedef struct{
  * \param port   Sensor port to be inquired
  * \param dest    Pointer to store block information
  * \param signature The Color signatures to look for, specified by byte level values, eg. 1000 0000 is sig 1, 0010 0000 is signature 3
- * \param blocks The amount of blocks to track. Due to I2C limitations, 2 blocks is max and second block will not have tracking_index and age specified  
+ * \param blocks The amount of blocks to track. Due to I2C buffer driver limitations, 4 blocks is max.  
  * */
-void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block_response *dest, uint8_t signature, uint8_t blocks);
+void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t signature, uint8_t blocks);
 
 /**
  * @} // End of group

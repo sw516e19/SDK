@@ -530,43 +530,72 @@ error_exit:
 
 
 typedef struct{
-
-	pixycam2_header header;
+	uint16_t sync;
+	uint8_t packet_type;
+	uint8_t payload_length;
 	uint8_t signature;
 	uint8_t blocks;
 
-} pixycam2_request_get_blocks;
+} pixycam2_request_get_blocks_t;
 
-void pixycam_2_get_blocks(sensor_port_t port, pixycam_2_block_response *dest, uint8_t signature, uint8_t blocks){
+
+uint8_t min(uint8_t x, uint8_t y) {
+	return y ^ ((x ^ y) & -(x < y));
+}
+
+void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t signature, uint8_t blocks){
 	ER ercd;
-	pixycam2_request_get_blocks req;
+	pixycam2_request_get_blocks_t req;
 
-	req.header.sync = 0xc1ae;
-	req.header.packet_type = 32;
-	req.header.payload_length = 2;
+	req.sync = 0xc1ae;
+	req.packet_type = 32;
+	req.payload_length = 2;
 	req.signature = signature;
 	req.blocks = blocks;
 
 	CHECK_PORT(port);
 	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
+	CHECK_COND(blocks <= 4, E_OBJ); //Max 4 objects with 64 byte I2C buffer
 	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
 
-	int exp_size = blocks > 1 ? 32 : (sizeof(pixycam2_header) + sizeof(short)) + (sizeof(pixycam_2_block) * blocks);
+	uint_t readlen = 64; //Read entire 64 byte buffer
 
-	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks), exp_size);
-	//TODO: Well, the actual size should be: '(sizeof(pixycam2_header) + sizeof(short)) + (sizeof(pixycam_2_block) * blocks)'
-	//but due to i2c limitations, the max payload is 32 bytes (But sadly that's including the header)
-	//"\xAE\xC1\xE\x00", 4, 13); //
+	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), readlen);
 
 	assert(ercd == E_OK);
 
+
 	while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
 
-	if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
-    {
-		memcpy(dest, pI2CSensorData[port].raw, sizeof(pixycam2_header) + sizeof(short));
-		memcpy(dest->blocks, &(pI2CSensorData[port].raw[sizeof(pixycam2_header) + sizeof(short)]), dest->header.payload_length);
-    }
+	volatile uint8_t *raw = pI2CSensorData[port].raw;
+
+	if (raw[0] == 175 && raw[1] == 193) {
+
+		dest->header.sync           = (raw[1] << 8) | raw[0];
+		dest->header.packet_type    = raw[2];
+		dest->header.payload_length = raw[3];
+		dest->header.checksum       = (raw[5] << 8) | raw[4];
+
+		uint8_t block_count = dest->header.payload_length / sizeof(pixycam2_block_t);
+
+		block_count = min(block_count, blocks);
+		
+		for (int8_t i = 0; i < block_count; i++) {
+			pixycam2_block_t currentblock;
+			uint8_t offset = sizeof(pixycam2_block_t) * i;
+
+			currentblock.signature      = (raw[offset + 7] << 8) | raw[offset + 6];
+			currentblock.x_center       = (raw[offset + 9] << 8) | raw[offset + 8];
+			currentblock.y_center       = (raw[offset + 11] << 8) | raw[offset + 10];
+			currentblock.width          = (raw[offset + 13] << 8) | raw[offset + 12];
+			currentblock.height         = (raw[offset + 15] << 8) | raw[offset + 14];
+			currentblock.color_angle    = (raw[offset + 17] << 8) | raw[offset + 16];
+			currentblock.tracking_index = raw[offset + 18];
+			currentblock.age            = raw[offset + 19];
+
+			dest->blocks[i] = currentblock;
+		}
+	}
 
 	return;
 

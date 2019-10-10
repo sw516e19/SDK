@@ -84,9 +84,3 @@ void main_task(intptr_t unused) {
             object_counter = 0;
         }
 
-    }
-
-
-}
-
-
