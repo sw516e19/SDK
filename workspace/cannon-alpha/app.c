@@ -19,26 +19,6 @@
 #define _debug(x)
 #endif
 
-/*
-class TestClass {
-
-    int member;
-
-public:
-    TestClass() {
-        member = 0x12345678;
-    }
-
-    void test_method() {
-        static char buf[256];
-        sprintf(buf, "Member is 0x%08x.", member);
-        ev3_lcd_draw_string(buf, 0, 32);
-    }
-};
-
-auto obj2 = new TestClass();
-*/
-
 static sensor_type_t sensors[TNUM_SENSOR_PORT];
 
 static const uart_data_t *pUartSensorData = NULL;
@@ -49,37 +29,40 @@ static const i2c_data_t *pI2CSensorData = NULL;
 bool_t pixycam_test(sensor_port_t port) {
 	ER ercd;
 
-    ev3_lcd_draw_string("3", 0, 0);
-
 	CHECK_PORT(port);
 	//CHECK_COND(ev3_sensor_get_type(port) == HT_NXT_ACCEL_SENSOR, E_OBJ);
 	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
 
-    ev3_lcd_draw_string("4", 0, 0);
+    sensor_port_t pixycam_port = EV3_PORT_1;
+    motor_port_t motor_port = EV3_PORT_2;
 
-	ercd = start_i2c_transaction(port, 0x54, "\xAE\xC1\x20\x2\xFF\xFF", 6, 20);//"\xAE\xC1\xE\x00", 4, 13);
+    // initialize sensor and motor ports
+    ev3_sensor_config(pixycam_port, PIXYCAM_2);
+    ev3_motor_config(motor_port, LARGE_MOTOR);
 
-    ev3_lcd_draw_string("5", 0, 0);
+    // create block response var
+    pixycam2_block_response_t response;
 
-	assert(ercd == E_OK);
+    uint32_t see_count = 0;
 
-    ev3_lcd_draw_string("6", 0, 0);
-    pixycam_2_block b;
-    // spin while waiting for i2c to be idle again
-    while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
+    while (true) {
+        // call get blocks with the signatures
+        pixycam_2_get_blocks(EV3_PORT_1, &response, 8, 1);
 
-    if (pI2CSensorData[port].raw[0] == 175 && pI2CSensorData[port].raw[1] == 193)
-    {
-        char test[2];
-        b = pI2CSensorData[port].raw;
-        
+        // get block count
+        uint8_t block_count = response.header.payload_length / sizeof(pixycam2_block_t);
 
-        sprintf(test, "%hu", b.width);
+        // do stuff if there is a block
+        if (block_count > 0) {
+            ++see_count;
+            char test[4];
+            sprintf(test, "%u", see_count);
+            ev3_lcd_draw_string(test, 0, 0);
 
-        ev3_lcd_draw_string(test, 0, 0);
-
-        //ev3_lcd_draw_string("7", 0, 0);
+            ev3_motor_set_power(motor_port, 50);
+        }
     }
+
 
 	return true;
 
