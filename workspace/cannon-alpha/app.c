@@ -47,7 +47,7 @@ bool_t pixycam_test(sensor_port_t port) {
 
     while (true) {
         // call get blocks with the signatures
-        pixycam_2_get_blocks(EV3_PORT_1, &response, 8, 1);
+        pixycam_2_get_blocks(pixycam_port, &response, 8, 1);
 
         // get block count
         uint8_t block_count = response.header.payload_length / sizeof(pixycam2_block_t);
@@ -62,7 +62,6 @@ bool_t pixycam_test(sensor_port_t port) {
             ev3_motor_set_power(motor_port, 50);
         }
     }
-
 
 	return true;
 
