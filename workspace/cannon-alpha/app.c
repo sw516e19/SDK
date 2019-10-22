@@ -70,48 +70,24 @@ error_exit:
 	return false;
 }
 
+// Detect an object with the PixyCam and write to a buffer to be further processed
+void detect_task(intptr_t unused) {
 
+    // Get the block of the falling object. Write it to a data structure that calculate_task can read
+    pixycam_test(EV3_PORT_1); // TODO: REWRITE DIS
 
-
-void main_task(intptr_t unused) {
-
-    ev3_lcd_set_font(EV3_FONT_MEDIUM);
-
-
-    ev3_lcd_draw_string("1", 0, 0);
-
-    brickinfo_t brickinfo;
-    ER ercd = fetch_brick_info(&brickinfo);
-    pUartSensorData = brickinfo.uart_sensors;
-    pAnalogSensorData = brickinfo.analog_sensors;
-    pI2CSensorData = brickinfo.i2c_sensors;
-    assert(pUartSensorData != NULL);
-    assert(pAnalogSensorData != NULL);
-    assert(pI2CSensorData != NULL);
-
-    ev3_lcd_draw_string("2", 0, 0);
-
-    pixycam_test(EV3_PORT_1);
-
-
-
-
-
-
-
-    //motor_type_t type = LARGE_MOTOR;
-
-    //ev3api::Motor test(ePortM::PORT_A);
-
-/*
-    // Test global constructor
-    obj2->test_method();
-
-    // Test function in static library
-    libcpp_test_c_echo_function(777);
-
-    // Test class in static library
-    LibSampleClass a;
-    a.draw();
-*/
 }
+
+// Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
+void calculate_task(intptr_t unused) {
+
+    // Read data from detect_task, perform calculations and eventually pass shooting request to shoot_task
+
+}
+
+// Fire the cannon, and (hopefully) hit the target
+void shoot_task(intptr_t unused) {
+
+    // Use the motor to fire the projectile
+
+};
