@@ -70,7 +70,7 @@ error_exit:
 	return false;
 }
 
-// Detect an object with the PixyCam and write to a buffer to be further processed
+// Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
 
     // Get the block of the falling object. Write it to a data structure that calculate_task can read
