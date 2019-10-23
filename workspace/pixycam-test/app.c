@@ -14,9 +14,9 @@ void lcd_clear(){
 
 void main_task(intptr_t unused) {
 
-    pixycam_2_block block;
+    pixycam_2_block_t block;
 
-    pixycam_2_block_response response;
+    pixycam_2_block_response_t response;
 
     response.blocks = &block;
 

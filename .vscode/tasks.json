@@ -6,7 +6,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "cd workspace; make app=pixycam-test;",
+            "command": "cd workspace; make app=rasmus;",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -15,7 +15,7 @@
         {
             "label": "bluetooth upload",
             "type": "shell",
-            "command": "cd workspace; make upload ip=10.0.10.1 from=app to=pixycam-tracking-0.1",
+            "command": "cd workspace; make upload ip=10.0.10.1 from=app to=measure-prick",
             "group": {
                 "kind": "build",
                 "isDefault": true
