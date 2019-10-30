@@ -20,14 +20,15 @@ typedef struct
 void main_shooter()
 {
     syslog(LOG_WARNING, "main_shooter");
-    const sensor_port_t pixycamPort = EV3_PORT_1;
-    const sensor_port_t motorPort = EV3_PORT_A;
-    const uint8_t signature = SIGNATURE_1;
-    const uint16_t triggerDuration = 50;
-    const uint16_t yTargetLocation = 950;
+    const sensor_port_t pixycamPort = EV3_PORT_1; //Which port is the pixy cam on
+    const motor_port_t motorPort = EV3_PORT_A;    //Which port is the motor on
+    const uint8_t signature = SIGNATURE_1;        //Which signature to shoot
+    const uint16_t triggerDuration = 50;          //Time to trigger a shit
+    const uint16_t yTargetLocation = 950;         //Target location of shooting window
+    const int16_t rotation = 5 * 360;             //Rotation in degrees.
+    const int8_t speed = 100;                     //Percentage of speed (-100 to 100). Negative is reverse.
     ev3_sensor_config(pixycamPort, PIXYCAM_2);
     ev3_motor_config(motorPort, LARGE_MOTOR);
-    //set_tim(0);
 
     ShooterData_t data;
     SYSTIM shootTime;
@@ -35,16 +36,15 @@ void main_shooter()
     {
 
         detectobj(pixycamPort, signature, &data);
-        calculateIntersection(data, triggerDuration, yTargetLocation, shootTime);
-
-        syslog(LOG_WARNING, "shootTime main: %lu", shootTime);
-        shootobj(motorPort, shootTime);
-        cleanData(&data, shootTime);
+        calculateIntersection(data, triggerDuration, yTargetLocation, &shootTime);
+        shootobj(motorPort, shootTime, rotation, speed);
+        cleanData(&data, &shootTime);
     }
 }
 
 void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data)
 {
+
     syslog(LOG_WARNING, "detectobj");
     uint8_t found = 0;
     pixycam2_block_response_t response;
@@ -53,7 +53,6 @@ void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data
 
     while (found != 1)
     {
-        //syslog(LOG_WARNING, "while");
         tslp_tsk(50);
         pixycam_2_get_blocks(pixycamPort, &response, signature, 1);
         if (response.header.payload_length == 14)
@@ -81,7 +80,7 @@ void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data
     get_tim(&data->lastDetected);
     data->lastX = response.blocks[0].x_center;
     data->lastY = response.blocks[0].y_center;
-    syslog(LOG_WARNING, "2nd done");
+    syslog(LOG_WARNING, "2nd detected");
 }
 
 void calculateIntersection(ShooterData_t data, uint16_t triggerDuration, uint16_t yTargetLocation, SYSTIM *dateTime)
@@ -103,12 +102,15 @@ void calculateIntersection(ShooterData_t data, uint16_t triggerDuration, uint16_
     double gravityPixels = 0.002804285714285714; // Measured in pixels/ms
     if (yDifference < 1)
     {
-        // Movement not calculatable.
+        syslog(LOG_WARNING, "yDifference less than 1: %d!", yDifference);
+        return;
     }
     int16_t avgFallVelocity = yDifference / fallSampleDuration;
     if (avgFallVelocity <= 0)
     {
-        // WRONG worng wrong
+        syslog(LOG_WARNING, "Velocity negative!");
+        syslog(LOG_WARNING, "avgFallVelocity: %d", avgFallVelocity);
+        return;
     }
 
     int16_t midwayFallSamplePoint = fallSampleDuration / 2;
@@ -120,52 +122,44 @@ void calculateIntersection(ShooterData_t data, uint16_t triggerDuration, uint16_
     uint16_t delayBeforeShot = (sqrt(-2 * gravityPixels * calculatedMidpointX + 2 * gravityPixels * yTargetLocation + pow(avgFallVelocity, 2)) - avgFallVelocity) / gravityPixels;
     syslog(LOG_WARNING, "delayBeforeShot: %u", delayBeforeShot);
 
-    delayBeforeShot = 6000;
+    //delayBeforeShot = 6000;
 
     if (delayBeforeShot < triggerDuration)
     {
         // this is bad. We cannot shoot in time...
     }
 
-
-    dateTime = data.firstDetected + midwayFallSamplePoint + (delayBeforeShot - triggerDuration);
+    *dateTime = data.firstDetected + midwayFallSamplePoint + (delayBeforeShot - triggerDuration);
 
     syslog(LOG_WARNING, "delayBeforeShot - triggerDuration: %u", (delayBeforeShot - triggerDuration));
 
     SYSTIM currentSystim;
     get_tim(&currentSystim);
     syslog(LOG_WARNING, "current: %lu", currentSystim);
-    syslog(LOG_WARNING, "datetime: %lu", dateTime);
-    //syslog(LOG_WARNING, "diff: %d", (int64_t) dateTime - currentSystim);
+    syslog(LOG_WARNING, "datetime: %lu", *dateTime);
 }
 
-void shootobj(motor_port_t motorPort, SYSTIM *fireTime)
+void shootobj(motor_port_t motorPort, SYSTIM fireTime, int rotation, int8_t speed)
 {
-    SYSTIM fireTime2;
     syslog(LOG_WARNING, "shootobj");
     if (fireTime == NULL)
     {
         return;
     }
-    else
-    {
-        fireTime2 = fireTime;
-    }
 
     SYSTIM currentTime;
     get_tim(&currentTime);
     uint16_t counter = 0;
-    syslog(LOG_WARNING, "fireTime2: %lu", fireTime2);
-    while (fireTime2 > currentTime)
+    syslog(LOG_WARNING, "fireTime2: %lu", fireTime);
+    while (fireTime > currentTime)
     {
         get_tim(&currentTime);
     }
-    
-    ev3_motor_rotate(motorPort, 5 * 360, 100, false);
+
+    ev3_motor_rotate(motorPort, rotation, speed, false);
 }
 void cleanData(ShooterData_t *data, SYSTIM *shootTime)
 {
-    syslog(LOG_WARNING, "cleanData");
     data->firstDetected = NULL;
     data->firstX = NULL;
     data->firstY = NULL;
