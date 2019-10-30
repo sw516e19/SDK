@@ -35,9 +35,11 @@ void main_shooter()
     {
 
         detectobj(pixycamPort, signature, &data);
-        calculateIntersection(data, triggerDuration, yTargetLocation, &shootTime);
+        calculateIntersection(data, triggerDuration, yTargetLocation, shootTime);
+
+        syslog(LOG_WARNING, "shootTime main: %lu", shootTime);
         shootobj(motorPort, shootTime);
-        cleanData(&data, &shootTime);
+        cleanData(&data, shootTime);
     }
 }
 
@@ -93,7 +95,12 @@ void calculateIntersection(ShooterData_t data, uint16_t triggerDuration, uint16_
     int16_t xDifference = data.lastX - data.firstX;
     int16_t yDifference = data.lastY - data.firstY;
     int16_t fallSampleDuration = data.lastDetected - data.firstDetected;
-    double gravityPixels = 0.2804321321321; // TODO: Calculate more precisely
+    //Fall = tan(20) * 1 meter = 0.364 meter * 2 = 0.728 m.
+    //Pixels: 0.728 m / 208 pixels = 0,0035 m per pixel (Or 0,35 cm per pixel)
+    //Gravity acceleration = 9,815 m/s^2 / 0,0035 m / pixel = 2804.285714285714 pixel/s^2
+    //Changed to pixel / ms^2  = 2804,285714285714 pixel/s^2 / (1000*1000) = 0,002804285714285714
+
+    double gravityPixels = 0.002804285714285714; // Measured in pixels/ms
     if (yDifference < 1)
     {
         // Movement not calculatable.
@@ -129,31 +136,30 @@ void calculateIntersection(ShooterData_t data, uint16_t triggerDuration, uint16_
     get_tim(&currentSystim);
     syslog(LOG_WARNING, "current: %lu", currentSystim);
     syslog(LOG_WARNING, "datetime: %lu", dateTime);
-    syslog(LOG_WARNING, "diff: %d", (int64_t) dateTime - currentSystim);
+    //syslog(LOG_WARNING, "diff: %d", (int64_t) dateTime - currentSystim);
 }
 
-void shootobj(motor_port_t motorPort, SYSTIM fireTime)
+void shootobj(motor_port_t motorPort, SYSTIM *fireTime)
 {
     SYSTIM fireTime2;
     syslog(LOG_WARNING, "shootobj");
     if (fireTime == NULL)
     {
-        get_tim(&fireTime2);
+        return;
     }
     else
     {
         fireTime2 = fireTime;
     }
+
     SYSTIM currentTime;
     get_tim(&currentTime);
-    if (currentTime > fireTime)
+    uint16_t counter = 0;
+    syslog(LOG_WARNING, "fireTime2: %lu", fireTime2);
+    while (fireTime2 > currentTime)
     {
-        // Once again... Too late.
+        get_tim(&currentTime);
     }
-    else
-    {
-    }
-    while(fireTime > currentTime) {}
     
     ev3_motor_rotate(motorPort, 5 * 360, 100, false);
 }
