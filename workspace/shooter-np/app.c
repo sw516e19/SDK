@@ -23,10 +23,13 @@ void main_shooter()
     const sensor_port_t pixycamPort = EV3_PORT_1; //Which port is the pixy cam on
     const motor_port_t motorPort = EV3_PORT_A;    //Which port is the motor on
     const uint8_t signature = SIGNATURE_1;        //Which signature to shoot
-    const uint16_t triggerDuration = 50;          //Time to trigger a shit
+    const uint16_t fireDuration = 92;             //Time to fire a shot
+    const uint16_t flightTime = 135;              //Time in flight (depends on distance of the projectile)
     const uint16_t yTargetLocation = 950;         //Target location of shooting window
     const int16_t rotation = 5 * 360;             //Rotation in degrees.
     const int8_t speed = 100;                     //Percentage of speed (-100 to 100). Negative is reverse.
+
+    const uint16_t totalTriggerTime = fireDuration + flightTime;
     ev3_sensor_config(pixycamPort, PIXYCAM_2);
     ev3_motor_config(motorPort, LARGE_MOTOR);
 
@@ -36,7 +39,7 @@ void main_shooter()
     {
 
         detectobj(pixycamPort, signature, &data);
-        calculateIntersection(data, triggerDuration, yTargetLocation, &shootTime);
+        calculateIntersection(data, totalTriggerTime, yTargetLocation, &shootTime);
         shootobj(motorPort, shootTime, rotation, speed);
         if (shootTime != NULL)
         {
