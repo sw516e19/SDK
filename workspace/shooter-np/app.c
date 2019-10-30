@@ -38,6 +38,10 @@ void main_shooter()
         detectobj(pixycamPort, signature, &data);
         calculateIntersection(data, triggerDuration, yTargetLocation, &shootTime);
         shootobj(motorPort, shootTime, rotation, speed);
+        if (shootTime != NULL)
+        {
+            tslp_tsk(5 * 1000); //Sleep for 5 seconds after each shot.
+        }
         cleanData(&data, &shootTime);
     }
 }
