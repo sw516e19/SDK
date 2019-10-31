@@ -475,15 +475,6 @@ typedef enum {
 
 /**
  * \~English
- * \brief   Returns the smallest of 2 uint8_t
- * \param x First number
- * \param y Second number
- * \return  The smaller one of the two
-**/
-uint8_t min(uint8_t x, uint8_t y);
-
-/**
- * \~English
  * \brief        Get blocks detected by the pixycam2.
  * \details      When an invalid sensor support number is specified, always returns false (error log is output)
  * \param port   Sensor port to be inquired
