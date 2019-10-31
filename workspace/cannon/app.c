@@ -37,6 +37,10 @@ void detect_task(intptr_t unused) {
 
         write_string("DETECT_TASK", true);
         tslp_tsk(1000);
+
+        //1. Get block data
+
+        //2. Set interrupt/flag for calc task
     }
 
     // Get the block of the falling object. Write it to a data structure that calculate_task can read
@@ -49,6 +53,8 @@ void calculate_task(intptr_t unused) {
 
     char buff[30];
 
+    
+
     while (true)
     {
 
@@ -57,6 +63,14 @@ void calculate_task(intptr_t unused) {
         write_string(buff, false);
 
         tslp_tsk(100);
+
+        // 1. Wait for data to be available
+
+        // 2. Grab data from global variable
+
+        // 3. Begin processing on the data from the pixycam
+
+        // 4. Once data has been processed, set when to fire the turret (raise shoot tasks priority?)
     }
 
 
@@ -68,5 +82,11 @@ void calculate_task(intptr_t unused) {
 void shoot_task(intptr_t unused) {
 
     // Use the motor to fire the projectile
+    
+    // 0. Wait for available time to shoot through the global variable
+    
+    // 1. shoot when time is reached 
+
+    // 2. (then lower shoot tasks priority?)
 
 }
