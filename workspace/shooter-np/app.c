@@ -25,7 +25,7 @@ void main_shooter()
     const uint8_t signature = SIGNATURE_1;        //Which signature to shoot
     const uint16_t fireDuration = 92;             //Time to fire a shot
     const uint16_t flightTime = 135;              //Time in flight (depends on distance of the projectile)
-    const uint16_t yTargetLocation = 950;         //Target location of shooting window
+    const uint16_t yTargetLocation = 208;         //Target location of shooting window
     const int16_t rotation = 5 * 360;             //Rotation in degrees.
     const int8_t speed = 100;                     //Percentage of speed (-100 to 100). Negative is reverse.
 
@@ -37,7 +37,6 @@ void main_shooter()
     SYSTIM shootTime;
     while (1)
     {
-
         detectobj(pixycamPort, signature, &data);
         calculateIntersection(data, totalTriggerTime, yTargetLocation, &shootTime);
         shootobj(motorPort, shootTime, rotation, speed);
@@ -51,7 +50,6 @@ void main_shooter()
 
 void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data)
 {
-
     syslog(LOG_WARNING, "detectobj");
     uint8_t found = 0;
     pixycam2_block_response_t response;
@@ -176,9 +174,42 @@ void cleanData(ShooterData_t *data, SYSTIM *shootTime)
     shootTime = NULL;
 }
 
+void nonblockpixycam(){
+    const sensor_port_t pixycamPort = EV3_PORT_1; //Which port is the pixy cam on
+    pixycam2_block_response_t response;
+    pixycam2_block_t block[1];
+    response.blocks = &block;
+    ev3_sensor_config(pixycamPort,PIXYCAM_2);
+
+    pixycam_2_sendblocks(pixycamPort, SIGNATURE_1, 1);
+
+    tslp_tsk(16);
+
+    pixycam_2_fetch(pixycamPort, &response,1);
+
+    syslog(LOG_WARNING, "nbpc: %d",response.header.payload_length);
+}
+
+void pixycamblocked(){
+    const sensor_port_t pixycamPort = EV3_PORT_1; //Which port is the pixy cam on
+    pixycam2_block_response_t response;
+    pixycam2_block_t block[1];
+    response.blocks = &block;
+    ev3_sensor_config(pixycamPort,PIXYCAM_2);
+    
+    pixycam_2_get_blocks(pixycamPort,&response,1,1);
+
+    syslog(LOG_WARNING, "bpc: %d",response.header.payload_length);
+}
+
 void main_task(intptr_t unused)
 {
     syslog(LOG_WARNING, "main_task");
+    ev3_button_set_on_clicked(UP_BUTTON,nonblockpixycam,0);
+    ev3_button_set_on_clicked(DOWN_BUTTON,pixycamblocked,0);
 
-    main_shooter();
+    while (1){}
+    
+    //main_shooter();
 }
+
