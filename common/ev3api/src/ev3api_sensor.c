@@ -562,7 +562,7 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
 
 	// ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), readlen);
 
-	pixycam_2_sendblocks(port, signature, blocks);
+	pixycam_2_send_block_request(port, signature, blocks);
 
 	while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
 
@@ -606,7 +606,7 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
 }
 
 
-void pixycam_2_fetch(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t blocks){
+void pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t blocks){
 	volatile uint8_t *raw = pI2CSensorData[port].raw;
 
 	if (raw[0] == 175 && raw[1] == 193) {

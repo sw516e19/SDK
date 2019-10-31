@@ -181,11 +181,11 @@ void nonblockpixycam(){
     response.blocks = &block;
     ev3_sensor_config(pixycamPort,PIXYCAM_2);
 
-    pixycam_2_sendblocks(pixycamPort, SIGNATURE_1, 1);
+    pixycam_2_send_block_request(pixycamPort, SIGNATURE_1, 1);
 
     tslp_tsk(16);
 
-    pixycam_2_fetch(pixycamPort, &response,1);
+    pixycam_2_fetch_blocks(pixycamPort, &response,1);
 
     syslog(LOG_WARNING, "nbpc: %d",response.header.payload_length);
 }
