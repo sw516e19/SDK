@@ -7,6 +7,10 @@
 #include <t_stddef.h>
 #include <t_syslog.h>
 
+const motor_port_t motorPort = EV3_PORT_A; //Which port is the motor on
+const uint8_t motorGearRatio = 5;
+int16_t fireDuration = 92;              //Time to fire a shot
+
 typedef struct
 {
     uint16_t firstX;
@@ -17,26 +21,64 @@ typedef struct
     SYSTIM lastDetected;
 } ShooterData_t;
 
+void cog_mechanismSmall() {
+    int16_t rotation = motorGearRatio * 10;
+    int8_t speedabs = 100;
+    ev3_motor_rotate(motorPort, rotation, speedabs, false);
+}
+void cog_mechanismMedium() {
+    int16_t rotation = motorGearRatio * 20;
+    int8_t speedabs = 100;
+    ev3_motor_rotate(motorPort, rotation, speedabs, false);
+}
+void cog_mechanismLarge() {
+    int16_t rotation = motorGearRatio * 30;
+    int8_t speedabs = 100;
+    ev3_motor_rotate(motorPort, rotation, speedabs, false);
+}
+void incrementFireTime() {
+    fireDuration = fireDuration + 1;
+    printFireDuration();
+}
+void decrementFireTime() {
+    fireDuration = fireDuration - 1;
+    printFireDuration();
+}
+
+void printFireDuration() {
+    char str[20];
+    sprintf(str, "                    ");
+    ev3_lcd_draw_string(str, 0, 0);
+    sprintf(str, "Fire: %d", fireDuration);
+    ev3_lcd_draw_string(str, 0, 0);
+}
+
+
 void main_shooter()
 {
     syslog(LOG_WARNING, "main_shooter");
-    const sensor_port_t pixycamPort = EV3_PORT_1; //Which port is the pixy cam on
-    const motor_port_t motorPort = EV3_PORT_A;    //Which port is the motor on
-    const uint8_t signature = SIGNATURE_1;        //Which signature to shoot
-    const uint16_t fireDuration = 92;             //Time to fire a shot
-    const uint16_t flightTime = 135;              //Time in flight (depends on distance of the projectile)
-    const uint16_t yTargetLocation = 208;         //Target location of shooting window
-    const int16_t rotation = 5 * 360;             //Rotation in degrees.
-    const int8_t speed = 100;                     //Percentage of speed (-100 to 100). Negative is reverse.
+    const sensor_port_t pixycamPort = EV3_PORT_1;  //Which port is the pixy cam on
+    const uint8_t signature = SIGNATURE_1;         //Which signature to shoot
+    const uint16_t flightTime = 135;               //Time in flight (depends on distance of the projectile)
+    const uint16_t yTargetLocation = 281;          //Target location of shooting window 104 pixel + (53.1 cm + 9 cm) / 0.35 cm per pixel = 281
+    const int16_t rotation = motorGearRatio * 360; //Rotation in degrees.
+    const int8_t speed = 100;                      //Percentage of speed (-100 to 100). Negative is reverse.
 
-    const uint16_t totalTriggerTime = fireDuration + flightTime;
     ev3_sensor_config(pixycamPort, PIXYCAM_2);
     ev3_motor_config(motorPort, LARGE_MOTOR);
+    ev3_lcd_set_font(EV3_FONT_MEDIUM);
+    ev3_button_set_on_clicked(LEFT_BUTTON, cog_mechanismLarge, 0);
+    ev3_button_set_on_clicked(ENTER_BUTTON, cog_mechanismMedium, 0);
+    ev3_button_set_on_clicked(RIGHT_BUTTON, cog_mechanismSmall, 0);
+    ev3_button_set_on_clicked(UP_BUTTON, incrementFireTime, 0);
+    ev3_button_set_on_clicked(DOWN_BUTTON, decrementFireTime, 0);
 
     ShooterData_t data;
     SYSTIM shootTime;
     while (1)
     {
+        int16_t totalTriggerTime = fireDuration + flightTime;
+
         detectobj(pixycamPort, signature, &data);
         calculateIntersection(data, totalTriggerTime, yTargetLocation, &shootTime);
         shootobj(motorPort, shootTime, rotation, speed);
@@ -88,7 +130,7 @@ void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data
     syslog(LOG_WARNING, "2nd detected");
 }
 
-void calculateIntersection(ShooterData_t data, uint16_t triggerDuration, uint16_t yTargetLocation, SYSTIM *dateTime)
+void calculateIntersection(ShooterData_t data, int16_t triggerDuration, uint16_t yTargetLocation, SYSTIM *dateTime)
 {
     syslog(LOG_WARNING, "calculateIntersection");
     if (data.lastDetected == NULL)
