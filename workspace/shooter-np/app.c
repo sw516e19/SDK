@@ -7,9 +7,21 @@
 #include <t_stddef.h>
 #include <t_syslog.h>
 
-const motor_port_t motorPort = EV3_PORT_A; //Which port is the motor on
-const uint8_t motorGearRatio = 5;
-int16_t fireDuration = 92;              //Time to fire a shot
+#define MOTOR_GEAR_RATIO 5
+const motor_port_t MOTOR_PORT = EV3_PORT_A; //Which port is the motor on
+const sensor_port_t PIXY_PORT = EV3_PORT_1; //Which port is the pixy cam on
+//Fall = tan(20) * 1 meter = 0.364 meter * 2 = 0.728 m.
+//Pixels: 0.728 m / 208 pixels = 0,0035 m per pixel (Or 0,35 cm per pixel)
+//Gravity acceleration = 9,815 m/s^2 / 0,0035 m / pixel = 2804.285714285714 pixel/s^2
+//Changed to pixel / ms^2  = 2804,285714285714 pixel/s^2 / (1000*1000) = 0,002804285714285714
+const double GRAVITY_PIXELS = 0.002804285714285714; // Measured in pixels/ms
+const uint8_t PIXY_SIGNATURE = SIGNATURE_1;
+const uint8_t FLIGHT_TIME = 135;                       //Flight time of projectile, measured in milliseconds.
+const uint8_t TRIGGER_MECHANISM = 90;                  //Time for the trigger mechanism to fire.
+const uint16_t Y_TARGET_LOCATION = 281;                //Target location in Y-pixel. Calculation: shooting window 104 pixel + (53.1 cm + 9 cm) / 0.35 cm per pixel = 281
+const int16_t SHOOT_ROTATION = MOTOR_GEAR_RATIO * 360; //Make 1 revolution when shooting
+const int8_t SHOOT_SPEED = 100;                        //Shoot speed
+int16_t TOTAL_FIRE_TIME;                               //Set in main_shooter()
 
 typedef struct
 {
@@ -21,70 +33,24 @@ typedef struct
     SYSTIM lastDetected;
 } ShooterData_t;
 
-void cog_mechanismSmall() {
-    int16_t rotation = motorGearRatio * 10;
-    int8_t speedabs = 100;
-    ev3_motor_rotate(motorPort, rotation, speedabs, false);
-}
-void cog_mechanismMedium() {
-    int16_t rotation = motorGearRatio * 20;
-    int8_t speedabs = 100;
-    ev3_motor_rotate(motorPort, rotation, speedabs, false);
-}
-void cog_mechanismLarge() {
-    int16_t rotation = motorGearRatio * 30;
-    int8_t speedabs = 100;
-    ev3_motor_rotate(motorPort, rotation, speedabs, false);
-}
-void incrementFireTime() {
-    fireDuration = fireDuration + 1;
-    printFireDuration();
-}
-void decrementFireTime() {
-    fireDuration = fireDuration - 1;
-    printFireDuration();
-}
-
-void printFireDuration() {
-    char str[20];
-    sprintf(str, "                    ");
-    ev3_lcd_draw_string(str, 0, 0);
-    sprintf(str, "Fire: %d", fireDuration);
-    ev3_lcd_draw_string(str, 0, 0);
-}
-
-
 void main_shooter()
 {
-    syslog(LOG_WARNING, "main_shooter");
-    const sensor_port_t pixycamPort = EV3_PORT_1;  //Which port is the pixy cam on
-    const uint8_t signature = SIGNATURE_1;         //Which signature to shoot
-    const uint16_t flightTime = 135;               //Time in flight (depends on distance of the projectile)
-    const uint16_t yTargetLocation = 281;          //Target location of shooting window 104 pixel + (53.1 cm + 9 cm) / 0.35 cm per pixel = 281
-    const int16_t rotation = motorGearRatio * 360; //Rotation in degrees.
-    const int8_t speed = 100;                      //Percentage of speed (-100 to 100). Negative is reverse.
+    TOTAL_FIRE_TIME = FLIGHT_TIME + TRIGGER_MECHANISM; //Set the initial totalFireTime
 
-    ev3_sensor_config(pixycamPort, PIXYCAM_2);
-    ev3_motor_config(motorPort, LARGE_MOTOR);
-    ev3_lcd_set_font(EV3_FONT_MEDIUM);
-    ev3_button_set_on_clicked(LEFT_BUTTON, cog_mechanismLarge, 0);
-    ev3_button_set_on_clicked(ENTER_BUTTON, cog_mechanismMedium, 0);
-    ev3_button_set_on_clicked(RIGHT_BUTTON, cog_mechanismSmall, 0);
-    ev3_button_set_on_clicked(UP_BUTTON, incrementFireTime, 0);
-    ev3_button_set_on_clicked(DOWN_BUTTON, decrementFireTime, 0);
-
+    //Data for processing
     ShooterData_t data;
     SYSTIM shootTime;
     while (1)
     {
-        int16_t totalTriggerTime = fireDuration + flightTime;
-
-        detectobj(pixycamPort, signature, &data);
-        calculateIntersection(data, totalTriggerTime, yTargetLocation, &shootTime);
-        shootobj(motorPort, shootTime, rotation, speed);
-        if (shootTime != NULL)
+        detectobj(PIXY_PORT, PIXY_SIGNATURE, &data);
+        if (data.lastDetected != NULL) //If image was found.
         {
-            tslp_tsk(5 * 1000); //Sleep for 5 seconds after each shot.
+            calculateIntersection(data, TOTAL_FIRE_TIME, Y_TARGET_LOCATION, &shootTime);
+            if (shootTime != NULL) //If a shootTime was able to be determined.
+            {
+                shootobj(MOTOR_PORT, shootTime, SHOOT_ROTATION, SHOOT_SPEED);
+                tslp_tsk(5 * 1000); //Sleep for 5 seconds after each shot.
+            }
         }
         cleanData(&data, &shootTime);
     }
@@ -92,7 +58,6 @@ void main_shooter()
 
 void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data)
 {
-    syslog(LOG_WARNING, "detectobj");
     uint8_t found = 0;
     pixycam2_block_response_t response;
     pixycam2_block_t block[1];
@@ -115,80 +80,56 @@ void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data
             }
         }
     }
-    syslog(LOG_WARNING, "1st detect");
 
     tslp_tsk(16 * 4);
     pixycam_2_get_blocks(pixycamPort, &response, signature, 1);
     if (response.header.payload_length != 14)
     {
-        syslog(LOG_WARNING, "2nd missing");
+        //2nd object not found.
         return;
     }
     get_tim(&data->lastDetected);
     data->lastX = response.blocks[0].x_center;
     data->lastY = response.blocks[0].y_center;
-    syslog(LOG_WARNING, "2nd detected");
 }
 
 void calculateIntersection(ShooterData_t data, int16_t triggerDuration, uint16_t yTargetLocation, SYSTIM *dateTime)
 {
-    syslog(LOG_WARNING, "calculateIntersection");
     if (data.lastDetected == NULL)
     {
-        return;
         // Object not detected 2nd time.
+        return;
     }
     int16_t xDifference = data.lastX - data.firstX;
     int16_t yDifference = data.lastY - data.firstY;
     int16_t fallSampleDuration = data.lastDetected - data.firstDetected;
-    //Fall = tan(20) * 1 meter = 0.364 meter * 2 = 0.728 m.
-    //Pixels: 0.728 m / 208 pixels = 0,0035 m per pixel (Or 0,35 cm per pixel)
-    //Gravity acceleration = 9,815 m/s^2 / 0,0035 m / pixel = 2804.285714285714 pixel/s^2
-    //Changed to pixel / ms^2  = 2804,285714285714 pixel/s^2 / (1000*1000) = 0,002804285714285714
 
-    double gravityPixels = 0.002804285714285714; // Measured in pixels/ms
     if (yDifference < 1)
     {
-        syslog(LOG_WARNING, "yDifference less than 1: %d!", yDifference);
+        //Y-difference less than 1.
         return;
     }
-    int16_t avgFallVelocity = yDifference / fallSampleDuration;
+    double avgFallVelocity = yDifference / fallSampleDuration;
     if (avgFallVelocity <= 0)
     {
-        syslog(LOG_WARNING, "Velocity negative!");
-        syslog(LOG_WARNING, "avgFallVelocity: %d", avgFallVelocity);
+        //Fall velocity less than or equal to 0.
         return;
     }
 
-    int16_t midwayFallSamplePoint = fallSampleDuration / 2;
-    syslog(LOG_WARNING, "midwayFallSamplePoint: %d", midwayFallSamplePoint);
+    double midwayFallSamplePoint = fallSampleDuration / 2;
 
-    int16_t calculatedMidpointX = data.firstY + 0.5 * gravityPixels * pow(midwayFallSamplePoint, 2);
-    syslog(LOG_WARNING, "calculatedMidpointX: %d", calculatedMidpointX);
+    double addedFallVelocity = 0.5 * GRAVITY_PIXELS * pow(midwayFallSamplePoint, 2);
+    double initialFallVelocity = avgFallVelocity - addedFallVelocity;
 
-    uint16_t delayBeforeShot = (sqrt(-2 * gravityPixels * calculatedMidpointX + 2 * gravityPixels * yTargetLocation + pow(avgFallVelocity, 2)) - avgFallVelocity) / gravityPixels;
-    syslog(LOG_WARNING, "delayBeforeShot: %u", delayBeforeShot);
+    uint16_t delayBeforeShot; //Delay in ms before the shot.
 
-    //delayBeforeShot = 6000;
+    delayBeforeShot = (sqrt(-2 * GRAVITY_PIXELS * data.firstY + 2 * GRAVITY_PIXELS * yTargetLocation + pow(avgFallVelocity, 2)) - avgFallVelocity) / GRAVITY_PIXELS;
 
-    if (delayBeforeShot < triggerDuration)
-    {
-        // this is bad. We cannot shoot in time...
-    }
-
-    *dateTime = data.firstDetected + midwayFallSamplePoint + (delayBeforeShot - triggerDuration);
-
-    syslog(LOG_WARNING, "delayBeforeShot - triggerDuration: %u", (delayBeforeShot - triggerDuration));
-
-    SYSTIM currentSystim;
-    get_tim(&currentSystim);
-    syslog(LOG_WARNING, "current: %lu", currentSystim);
-    syslog(LOG_WARNING, "datetime: %lu", *dateTime);
+    *dateTime = data.firstDetected + delayBeforeShot - triggerDuration;
 }
 
 void shootobj(motor_port_t motorPort, SYSTIM fireTime, int rotation, int8_t speed)
 {
-    syslog(LOG_WARNING, "shootobj");
     if (fireTime == NULL)
     {
         return;
@@ -196,8 +137,6 @@ void shootobj(motor_port_t motorPort, SYSTIM fireTime, int rotation, int8_t spee
 
     SYSTIM currentTime;
     get_tim(&currentTime);
-    uint16_t counter = 0;
-    syslog(LOG_WARNING, "fireTime2: %lu", fireTime);
     while (fireTime > currentTime)
     {
         get_tim(&currentTime);
@@ -216,42 +155,56 @@ void cleanData(ShooterData_t *data, SYSTIM *shootTime)
     shootTime = NULL;
 }
 
-void nonblockpixycam(){
-    const sensor_port_t pixycamPort = EV3_PORT_1; //Which port is the pixy cam on
-    pixycam2_block_response_t response;
-    pixycam2_block_t block[1];
-    response.blocks = &block;
-    ev3_sensor_config(pixycamPort,PIXYCAM_2);
+typedef struct
+{
+    uint16_t degrees;
+    int8_t speed;
+} rot_data_t;
 
-    pixycam_2_send_block_request(pixycamPort, SIGNATURE_1, 1);
+void rotateMotor(intptr_t datapointer)
+{
+    rot_data_t *rotdata = (rot_data_t *)datapointer;
 
-    tslp_tsk(16);
+    int16_t rotation = rotdata->degrees * MOTOR_GEAR_RATIO;
 
-    pixycam_2_fetch_blocks(pixycamPort, &response,1);
-
-    syslog(LOG_WARNING, "nbpc: %d",response.header.payload_length);
+    ev3_motor_rotate(MOTOR_PORT, rotation, rotdata->speed, false);
 }
 
-void pixycamblocked(){
-    const sensor_port_t pixycamPort = EV3_PORT_1; //Which port is the pixy cam on
-    pixycam2_block_response_t response;
-    pixycam2_block_t block[1];
-    response.blocks = &block;
-    ev3_sensor_config(pixycamPort,PIXYCAM_2);
-    
-    pixycam_2_get_blocks(pixycamPort,&response,1,1);
+void setFireTime(intptr_t datapointer)
+{
+    int8_t fireTime = (int8_t)datapointer;
 
-    syslog(LOG_WARNING, "bpc: %d",response.header.payload_length);
+    TOTAL_FIRE_TIME = TOTAL_FIRE_TIME + fireTime;
+
+    char str[] = "                    ";
+    ev3_lcd_draw_string(str, 0, 16);
+    sprintf(str, "Fire: %d ms", TOTAL_FIRE_TIME);
+    ev3_lcd_draw_string(str, 0, 16);
 }
 
 void main_task(intptr_t unused)
 {
-    syslog(LOG_WARNING, "main_task");
-    ev3_button_set_on_clicked(UP_BUTTON,nonblockpixycam,0);
-    ev3_button_set_on_clicked(DOWN_BUTTON,pixycamblocked,0);
+    //Setup
+    ev3_lcd_set_font(EV3_FONT_MEDIUM);
+    ev3_motor_config(MOTOR_PORT, LARGE_MOTOR);
+    ev3_sensor_config(PIXY_PORT, PIXYCAM_2);
 
-    while (1){}
-    
-    //main_shooter();
+    //Handle cog mechanism
+    rot_data_t dataSml = {.degrees = 10, .speed = 100};
+    rot_data_t dataMed = {.degrees = 20, .speed = 100};
+    rot_data_t dataLrg = {.degrees = 30, .speed = 100};
+
+    ev3_button_set_on_clicked(LEFT_BUTTON, rotateMotor, &dataSml);
+    ev3_button_set_on_clicked(ENTER_BUTTON, rotateMotor, &dataMed);
+    ev3_button_set_on_clicked(RIGHT_BUTTON, rotateMotor, &dataLrg);
+
+    //Handle firetime
+
+    int8_t msIncrement = 5;
+    int8_t msDecrement = -5;
+
+    ev3_button_set_on_clicked(UP_BUTTON, setFireTime, msIncrement);
+    ev3_button_set_on_clicked(DOWN_BUTTON, setFireTime, msDecrement);
+
+    main_shooter();
 }
-

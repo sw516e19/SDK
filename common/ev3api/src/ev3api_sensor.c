@@ -562,11 +562,11 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
 
 	// ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), readlen);
 
-	pixycam_2_send_block_request(port, signature, blocks);
+	pixycam_2_sendblocks(port, signature, blocks);
 
 	while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
 
-	pixycam_2_fetch(port, dest, blocks);
+	pixycam_2_fetch_blocks(port, dest, blocks);
 
 	
 
