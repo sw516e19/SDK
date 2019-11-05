@@ -96,13 +96,13 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *milli
     uint16_t y_1 = *y_1_ptr;
     SYSTIM millis = *millis_ptr;
 
-    double milis_dec = millis / 1000; //is this actually necessary?
+    //double milis_dec = millis / 1000; //is this actually necessary?
     
     // 1. Find average fall speed
-    double v_avg = (y_1 - y_0) / milis_dec;
+    double v_avg = (y_1 - y_0) / millis;
 
     // 2. Find v_0 by subtracting half the acceleration from the free fall equation, e.g. 0.5 * GRAVITY_PIXELS * pow(t / 2, 2)
-    double v_0 = v_avg - (0.5 * GRAVITY_PIXELS * pow(milis_dec / 2, 2));
+    double v_0 = v_avg - (0.5 * GRAVITY_PIXELS * pow(millis / 2, 2));
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
