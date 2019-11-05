@@ -13,6 +13,7 @@
 
 #define GRAVITY_PIXELS 0.002804285714285714 // Measured in pixels/ms
 #define PIXYCAM_BLOCK_THRESHOLD 5 // The maximum amount of pixycam blocks we can detect
+#define POINT_OF_IMPACT 281 // the calculated point of impact at a distance of a meter
 
 // A 2d vector with an x coordinate, y coordinate, and v for velocity
 typedef struct {
@@ -105,7 +106,7 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *milli
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
-    SYSTIM fall_time = (SYSTIM)round(sqrt(2 * GRAVITY_PIXELS * (y_1 - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS) * 1000;
+    SYSTIM fall_time = (SYSTIM)(round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS) * 1000) - 135;
 
     return fall_time;
 }
