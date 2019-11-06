@@ -89,12 +89,12 @@ void detect_task(intptr_t unused) {
 }
 
 
-SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *millis_ptr) {
+SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_millis_ptr, SYSTIM *y1_millis_ptr) {
 
     // Dereference the values. POTENTIALLY TURN TO PASS-BY-VALUE, LOOK THROUGH LATER
     uint16_t y_0 = *y_0_ptr;
     uint16_t y_1 = *y_1_ptr;
-    SYSTIM millis = *millis_ptr;
+    SYSTIM millis = *y1_millis_ptr - *y0_millis_ptr;
 
     //double milis_dec = millis / 1000; //is this actually necessary?
     
@@ -106,14 +106,14 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *milli
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
-    SYSTIM fall_time = (SYSTIM)(round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS) * 1000) - 135;
+    SYSTIM fall_time = *y0_millis_ptr + (SYSTIM)(round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS) ) - 135;
 
     return fall_time;
 }
 
-SYSTIM new_blocks_available(SYSTIM *old_stamp){
+ulong_t new_blocks_available(SYSTIM *old_stamp){
 
-    SYSTIM result = detected_block.detection_time - *old_stamp;
+    ulong_t result = detected_block.detection_time - *old_stamp;
 
     old_stamp = detected_block.detection_time;
 
@@ -126,17 +126,13 @@ SYSTIM time_to_shoot = 0;
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
 void calculate_task(intptr_t unused) {
 
-    char buff[30];
-
     SYSTIM old = 0;
 
     SYSTIM current_time_to_shoot = 0;
-    SYSTIM time_difference = 0;
-
     uint16_t y_0 = -1, y_1 = -1;
 
     while (true) {
-        if (!(time_difference = new_blocks_available(&old))) {
+        if (!(new_blocks_available(&old))) {
             tslp_tsk(5);
             continue;
         }
@@ -159,7 +155,7 @@ void calculate_task(intptr_t unused) {
 
         //weight by picture, so the first picture is the least weighted
        
-        current_time_to_shoot = get_time_until_impact(&y_0, &y_1, &time_difference );
+        current_time_to_shoot = get_time_until_impact(&y_0, &y_1, &old, &detected_block.detection_time);
 
         if(detected_block.current_block_index > 0){
             time_to_shoot = (time_to_shoot + current_time_to_shoot) / 2;
