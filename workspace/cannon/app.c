@@ -14,6 +14,9 @@
 #define GRAVITY_PIXELS 0.002804285714285714 // Measured in pixels/ms
 #define PIXYCAM_BLOCK_THRESHOLD 5 // The maximum amount of pixycam blocks we can detect
 #define POINT_OF_IMPACT 281 // the calculated point of impact at a distance of a meter
+#define GEARING 5
+#define MOTOR_ROTATION_MILLIS 500
+#define PROJECTILE_TRAVEL_TIME 135
 
 // A 2d vector with an x coordinate, y coordinate, and v for velocity
 typedef struct {
@@ -94,7 +97,7 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_mi
     // Dereference the values. POTENTIALLY TURN TO PASS-BY-VALUE, LOOK THROUGH LATER
     uint16_t y_0 = *y_0_ptr;
     uint16_t y_1 = *y_1_ptr;
-    SYSTIM millis = *y1_millis_ptr - *y0_millis_ptr;
+    int millis = *y1_millis_ptr - *y0_millis_ptr;
 
     //double milis_dec = millis / 1000; //is this actually necessary?
     
@@ -102,11 +105,12 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_mi
     double v_avg = (y_1 - y_0) / millis;
 
     // 2. Find v_0 by subtracting half the acceleration from the free fall equation, e.g. 0.5 * GRAVITY_PIXELS * pow(t / 2, 2)
-    double v_0 = v_avg - (0.5 * GRAVITY_PIXELS * pow(millis / 2, 2));
+    double v_0 = v_avg - GRAVITY_PIXELS * millis;
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
-    SYSTIM fall_time = *y0_millis_ptr + (SYSTIM)(round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS) ) - 135;
+    int delta_t = round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
+    SYSTIM fall_time = *y0_millis_ptr + delta_t - PROJECTILE_TRAVEL_TIME;
 
     return fall_time;
 }
@@ -181,9 +185,39 @@ void calculate_task(intptr_t unused) {
 // Fire the cannon, and (hopefully) hit the target
 void shoot_task(intptr_t unused) {
 
-    while(time_to_shoot == 0)
-        tslp_tsk(5);
+    bool_t motor_running = false;
+    SYSTIM now;
+    bool_t await_trigger_time = false;
+    bool_t await_trigger_preparation = false;
 
+
+    while(true){
+        /*while( !motor_running && time_to_shoot == 0 )
+        tslp_tsk(1);*/
+        get_tim(&now);
+
+        await_trigger_time = now < time_to_shoot;
+        await_trigger_preparation = motor_running || time_to_shoot == 0;
+
+
+        if(await_trigger_preparation || await_trigger_time){
+            continue;
+        }
+
+        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, false);
+        motor_running = true;
+
+
+        while(ev3_motor_get_counts(EV3_PORT_A) != ((360 * GEARING) - 5)){
+            tslp_tsk(20);
+
+            ev3_motor_reset_counts(EV3_PORT_A);
+            motor_running = false;
+        }
+        
+    }
+
+     
     //shoot, reload, set time_to_shoot to 0
 
     // Use the motor to fire the projectile
