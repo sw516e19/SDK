@@ -28,7 +28,7 @@ int8_t SHOT_COUNT = 0;
 // Enable debug
 #define DEBUG
 
-typedef struct
+struct shooterdata
 {
     uint16_t firstX;
     uint16_t firstY;
@@ -36,7 +36,13 @@ typedef struct
     uint16_t lastX;
     uint16_t lastY;
     SYSTIM lastDetected;
-} ShooterData_t;
+};
+
+struct rotatedata
+{
+    uint16_t degrees;
+    int8_t speed;
+};
 
 void detectobj(sensor_port_t pixycamPort, uint8_t signature, ShooterData_t *data)
 {
@@ -143,6 +149,7 @@ void shootobj(motor_port_t motorPort, SYSTIM *fireTime, int rotation, int8_t spe
 
     ev3_motor_rotate(motorPort, rotation, speed, false);
 }
+
 void cleanData(ShooterData_t *data, SYSTIM *shootTime)
 {
     data->firstDetected = 0;
@@ -153,12 +160,6 @@ void cleanData(ShooterData_t *data, SYSTIM *shootTime)
     data->lastY = 0;
     shootTime = 0;
 }
-
-typedef struct
-{
-    uint16_t degrees;
-    int8_t speed;
-} rot_data_t;
 
 void rotateMotor(intptr_t datapointer)
 {
