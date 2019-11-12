@@ -18,6 +18,8 @@
 #define MOTOR_ROTATION_MILLIS 500
 #define PROJECTILE_TRAVEL_TIME 135
 
+#define DEBUG
+
 // A 2d vector with an x coordinate, y coordinate, and v for velocity
 typedef struct {
     double x;
@@ -32,8 +34,6 @@ typedef struct {
 } detected_pixycam_block_t;
 
 int8_t direction = 1;
-
-
 
 
 
@@ -53,6 +53,9 @@ uint8_t detect_task_block_index = 0;
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
 
+    // Initialize the pixycam
+    ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
+
     // Initialize detected_block's values
     detected_block.detection_time = 0;
 
@@ -70,7 +73,7 @@ void detect_task(intptr_t unused) {
         }
 
         // Call get blocks
-        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], &signatures, NUM_BLOCKS); // Time: 0
+        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], signatures, NUM_BLOCKS); // Time: 0
         
         // Sleep to let other tasks do some processing
         tslp_tsk(17); // Time: 17
@@ -78,6 +81,10 @@ void detect_task(intptr_t unused) {
         // If the payload length is 0, no block(s) were detected and the loop should be continued
         if(detected_block.pixycam_block_response[detect_task_block_index].header.payload_length == 0)
             continue; // Time: 17
+
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Detected block!");
+#endif
 
         // Get the detection time
         get_tim(&detected_block.detection_time); // Time: 17
@@ -90,7 +97,6 @@ void detect_task(intptr_t unused) {
         ++detect_task_block_index; // Time: 17
     }
 }
-
 
 SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_millis_ptr, SYSTIM *y1_millis_ptr) {
 
@@ -115,7 +121,7 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_mi
     return fall_time;
 }
 
-ulong_t new_blocks_available(SYSTIM *old_stamp){
+ulong_t new_blocks_available(SYSTIM *old_stamp) {
 
     ulong_t result = detected_block.detection_time - *old_stamp;
 
@@ -136,10 +142,16 @@ void calculate_task(intptr_t unused) {
     uint16_t y_0 = -1, y_1 = -1;
 
     while (true) {
+
+        // if no new block is available, simply sleep
         if (!(new_blocks_available(&old))) {
             tslp_tsk(5);
             continue;
         }
+
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Begin calculate on new block!");
+#endif
        
         if(y_0 < 0){
            y_0 = detected_block.pixycam_block_response[detected_block.current_block_index].blocks->y_center;
@@ -151,22 +163,26 @@ void calculate_task(intptr_t unused) {
         // 3. calculate
         bool_t y_1_is_set = y_1 >= 0;
         
-        if(y_1_is_set){
+        if(y_1_is_set) {
             y_0 = y_1;
         }
         y_1 = detected_block.pixycam_block_response[detected_block.current_block_index].blocks->y_center;
 
 
-        //weight by picture, so the first picture is the least weighted
-       
+        // weight by picture, so the first picture is the least weighted
         current_time_to_shoot = get_time_until_impact(&y_0, &y_1, &old, &detected_block.detection_time);
 
-        if(detected_block.current_block_index > 0){
+        if(detected_block.current_block_index > 0) {
             time_to_shoot = (time_to_shoot + current_time_to_shoot) / 2;
-        }else{
+        } else {
             time_to_shoot = current_time_to_shoot;
         }
         
+
+
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Finished calculating on block!");
+#endif
 
         // 1. Wait for data to be available
 
@@ -190,8 +206,10 @@ void shoot_task(intptr_t unused) {
     bool_t await_trigger_time = false;
     bool_t await_trigger_preparation = false;
 
+    // Initialize the motor
+    ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
 
-    while(true){
+    while(true) {
         /*while( !motor_running && time_to_shoot == 0 )
         tslp_tsk(1);*/
         get_tim(&now);
