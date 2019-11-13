@@ -544,29 +544,69 @@ uint8_t min(uint8_t x, uint8_t y) {
 }
 
 void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t signature, uint8_t blocks){
-	ER ercd;
-	pixycam2_request_get_blocks_t req;
+	//ER ercd;
+	// pixycam2_request_get_blocks_t req;
 
-	req.sync = 0xc1ae;
-	req.packet_type = 32;
-	req.payload_length = 2;
-	req.signature = signature;
-	req.blocks = blocks;
+	// req.sync = 0xc1ae;
+	// req.packet_type = 32;
+	// req.payload_length = 2;
+	// req.signature = signature;
+	// req.blocks = blocks;
 
-	CHECK_PORT(port);
-	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
-	CHECK_COND(blocks <= 4, E_OBJ); //Max 4 objects with 64 byte I2C buffer
-	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
+	// CHECK_PORT(port);
+	// CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
+	// CHECK_COND(blocks <= 4, E_OBJ); //Max 4 objects with 64 byte I2C buffer
+	// CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
 
-	uint_t readlen = 64; //Read entire 64 byte buffer
+	// uint_t readlen = 64; //Read entire 64 byte buffer
 
-	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), readlen);
+	// ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), readlen);
 
-	assert(ercd == E_OK);
-
+	pixycam_2_sendblocks(port, signature, blocks);
 
 	while(!((*pI2CSensorData[port].status) == I2C_TRANS_IDLE));
 
+	pixycam_2_fetch_blocks(port, dest, blocks);
+
+	
+
+	// old pixycam implementation. moved to pixycam_2_fetch
+	
+	// volatile uint8_t *raw = pI2CSensorData[port].raw;
+
+	// if (raw[0] == 175 && raw[1] == 193) {
+
+	// 	dest->header.sync           = (raw[1] << 8) | raw[0];
+	// 	dest->header.packet_type    = raw[2];
+	// 	dest->header.payload_length = raw[3];
+	// 	dest->header.checksum       = (raw[5] << 8) | raw[4];
+
+	// 	uint8_t block_count = dest->header.payload_length / sizeof(pixycam2_block_t);
+
+	// 	block_count = min(block_count, blocks);
+		
+	// 	for (int8_t i = 0; i < block_count; i++) {
+	// 		pixycam2_block_t currentblock;
+	// 		uint8_t offset = sizeof(pixycam2_block_t) * i;
+
+	// 		currentblock.signature      = (raw[offset + 7] << 8) | raw[offset + 6];
+	// 		currentblock.x_center       = (raw[offset + 9] << 8) | raw[offset + 8];
+	// 		currentblock.y_center       = (raw[offset + 11] << 8) | raw[offset + 10];
+	// 		currentblock.width          = (raw[offset + 13] << 8) | raw[offset + 12];
+	// 		currentblock.height         = (raw[offset + 15] << 8) | raw[offset + 14];
+	// 		currentblock.color_angle    = (raw[offset + 17] << 8) | raw[offset + 16];
+	// 		currentblock.tracking_index = raw[offset + 18];
+	// 		currentblock.age            = raw[offset + 19];
+
+	// 		dest->blocks[i] = currentblock;
+	// 	}
+	// }
+
+	return;
+}
+
+
+void pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t blocks){
 	volatile uint8_t *raw = pI2CSensorData[port].raw;
 
 	if (raw[0] == 175 && raw[1] == 193) {
@@ -596,12 +636,37 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
 			dest->blocks[i] = currentblock;
 		}
 	}
+	return;
+}
 
+void pixycam_2_send_block_request(sensor_port_t port, uint8_t signature, uint8_t blocks){
+	ER ercd;
+	pixycam2_request_get_blocks_t req;
+
+	req.sync = 0xc1ae;
+	req.packet_type = 32;
+	req.payload_length = 2;
+	req.signature = signature;
+	req.blocks = blocks;
+
+	CHECK_PORT(port);
+	CHECK_COND(ev3_sensor_get_type(port) == PIXYCAM_2, E_OBJ);
+	CHECK_COND(blocks <= 4, E_OBJ); //Max 4 objects with 64 byte I2C buffer
+	CHECK_COND(*pI2CSensorData[port].status == I2C_TRANS_IDLE, E_OBJ);
+
+	uint_t readlen = 64; //Read entire 64 byte buffer
+
+	ercd = start_i2c_transaction(port, 0x54, &req, sizeof(pixycam2_request_get_blocks_t), readlen);
+
+	assert(ercd == E_OK);
+	
 	return;
 
 error_exit:
 	syslog(LOG_WARNING, "%s(): ercd %d", __FUNCTION__, ercd);
 
 }
+
+
 
 
