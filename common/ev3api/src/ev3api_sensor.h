@@ -484,7 +484,7 @@ typedef enum {
  * */
 void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t signature, uint8_t blocks);
 void pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t blocks);
-void pixycam_2_send_block_request(sensor_port_t port, uint8_t signature, uint8_t blocks);
+void pixycam_2_sendblocks(sensor_port_t port, uint8_t signature, uint8_t blocks);
 
 /**
  * @} // End of group
