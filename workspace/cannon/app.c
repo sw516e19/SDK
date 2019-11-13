@@ -18,6 +18,7 @@
 #define MOTOR_ROTATION_MILLIS 500
 #define PROJECTILE_TRAVEL_TIME 135
 
+// Enable debugging
 #define DEBUG
 
 // A 2d vector with an x coordinate, y coordinate, and v for velocity
@@ -27,15 +28,17 @@ typedef struct {
     double v;
 } vec_t;
 
+// The struct of the detected pixycam block response. Contains the detection time and current block index to be parsed by calculate_task.
 typedef struct {
     pixycam2_block_response_t pixycam_block_response[PIXYCAM_BLOCK_THRESHOLD];
     SYSTIM detection_time;
     uint8_t current_block_index;
 } detected_pixycam_block_t;
 
+// A pixycam block array of size threshold, that is able to hold threshold anount of blocks.
+pixycam2_block_t pixycamBlockArray[PIXYCAM_BLOCK_THRESHOLD][PIXYCAM_BLOCK_THRESHOLD];
+
 int8_t direction = 1;
-
-
 
 void write_string(const char *arr, bool_t top) {
     ev3_lcd_set_font(EV3_FONT_MEDIUM);
@@ -53,18 +56,29 @@ uint8_t detect_task_block_index = 0;
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
 
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Detect task init");
+#endif
+
     // Initialize the pixycam
     ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
 
     // Initialize detected_block's values
     detected_block.detection_time = 0;
 
+    detected_block.pixycam_block_response[0].blocks = pixycamBlockArray[0];
+
     // Declare and assign signature and num_blocks variables
     block_signature_t signatures = SIGNATURE_1;
-    uint8_t NUM_BLOCKS = 1;
+    uint8_t num_blocks = 1;
+
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Detect task finished init");
+#endif
 
     // Begin detect_task loop
     while (true) {
+
         // If the threshold has been reached, do not allow getting blocks from the pixycam
         // Since arrays are 0-based, an array of size 5 would trigger an exception if the current index is 5
         if (detect_task_block_index == PIXYCAM_BLOCK_THRESHOLD) { // Time: 0
@@ -73,18 +87,37 @@ void detect_task(intptr_t unused) {
         }
 
         // Call get blocks
-        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], signatures, NUM_BLOCKS); // Time: 0
+        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], signatures, num_blocks); // Time: 0
         
         // Sleep to let other tasks do some processing
         tslp_tsk(17); // Time: 17
         
         // If the payload length is 0, no block(s) were detected and the loop should be continued
+
+                    #ifdef DEBUG
+    syslog(LOG_NOTICE, "Test 1");
+#endif
+
+        char debug[50];
+        sprintf(debug, "TEST SIZE: %d", sizeof(detected_block.pixycam_block_response[detect_task_block_index].blocks));
+
+                            #ifdef DEBUG
+    syslog(LOG_NOTICE, debug);
+#endif
+
         if(detected_block.pixycam_block_response[detect_task_block_index].header.payload_length == 0)
             continue; // Time: 17
+
+                    #ifdef DEBUG
+    syslog(LOG_NOTICE, "Test 2");
+#endif
+        break;
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Detected block!");
 #endif
+
+        break;
 
         // Get the detection time
         get_tim(&detected_block.detection_time); // Time: 17
@@ -95,6 +128,8 @@ void detect_task(intptr_t unused) {
 
         // Increment the detect_task_block_index for detect_task to know where the next block should be read to
         ++detect_task_block_index; // Time: 17
+
+        detected_block.pixycam_block_response[detect_task_block_index].blocks = pixycamBlockArray[detect_task_block_index];
     }
 }
 
@@ -135,6 +170,10 @@ SYSTIM time_to_shoot = 0;
 
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
 void calculate_task(intptr_t unused) {
+
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Calculate task init");
+#endif
 
     SYSTIM old = 0;
 
@@ -201,6 +240,10 @@ void calculate_task(intptr_t unused) {
 // Fire the cannon, and (hopefully) hit the target
 void shoot_task(intptr_t unused) {
 
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Shoot task init");
+#endif
+
     bool_t motor_running = false;
     SYSTIM now;
     bool_t await_trigger_time = false;
@@ -210,6 +253,7 @@ void shoot_task(intptr_t unused) {
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
 
     while(true) {
+
         /*while( !motor_running && time_to_shoot == 0 )
         tslp_tsk(1);*/
         get_tim(&now);
@@ -218,7 +262,8 @@ void shoot_task(intptr_t unused) {
         await_trigger_preparation = motor_running || time_to_shoot == 0;
 
 
-        if(await_trigger_preparation || await_trigger_time){
+        if(await_trigger_preparation || await_trigger_time) {
+            tslp_tsk(1);
             continue;
         }
 
@@ -246,8 +291,7 @@ void shoot_task(intptr_t unused) {
 
     // 2. (then lower shoot tasks priority?)
 
-
-
     // At the end of shoot task, reset detect task's block index to 0
     detect_task_block_index = 0;
+    detected_block.pixycam_block_response[detect_task_block_index].blocks = pixycamBlockArray[detect_task_block_index];
 }
