@@ -34,6 +34,7 @@ typedef struct {
     pixycam2_block_response_t pixycam_block_response[PIXYCAM_RESPONSE_THRESHOLD];
     SYSTIM detection_time;
     uint8_t current_block_index;
+    SYSTIM timestamps[PIXYCAM_RESPONSE_THRESHOLD];
 } detected_pixycam_block_t;
 
 // A pixycam block array of size threshold, that is able to hold threshold anount of blocks.
@@ -72,6 +73,10 @@ void detect_task(intptr_t unused) {
     block_signature_t signatures = SIGNATURE_1;
     uint8_t num_blocks = 1;
 
+    pixycam2_block_t pixycam_block[PIXYCAM_BLOCK_THRESHOLD];
+    pixycam2_block_response_t pixycam_response;
+    pixycam_response.blocks = pixycam_block;
+
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task finished init");
 #endif
@@ -87,7 +92,7 @@ void detect_task(intptr_t unused) {
         }
 
         // Call get blocks
-        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], signatures, num_blocks); // Time: 0
+        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], signatures, 1); // Time: 0
         
         // Sleep to let other tasks do some processing
         tslp_tsk(17); // Time: 17
