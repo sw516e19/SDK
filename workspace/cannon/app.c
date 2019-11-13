@@ -92,10 +92,11 @@ void detect_task(intptr_t unused) {
         }
 
         // Call get blocks
-        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], signatures, 1); // Time: 0
+        pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
         
         // Sleep to let other tasks do some processing
         tslp_tsk(17); // Time: 17
+        pixycam_2_fetch_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], 1);
         
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 

@@ -475,7 +475,7 @@ typedef enum {
 
 /**
  * \~English
- * \brief        Get blocks detected by the pixycam2.
+ * \brief        Get blocks detected by the pixycam2 - blocking while it happens.
  * \details      When an invalid sensor support number is specified, always returns false (error log is output)
  * \param port   Sensor port to be inquired
  * \param dest    Pointer to store block information
@@ -483,10 +483,25 @@ typedef enum {
  * \param blocks The amount of blocks to track. Due to I2C buffer driver limitations, 4 blocks is max.  
  * */
 void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t signature, uint8_t blocks);
+
+/**
+ * \~English
+ * \brief           Fetches the data from the port and writes to destination.
+ * \param port      Sensor port to fetch from
+ * \param dest      The destination to write to
+ * \param blocks    The number of block which was requested.
+ * */
 void pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t blocks);
+
+/**
+ * \~English
+ * \brief           Sends the pixy cam request to the port for the number of blocks with a given signature
+ * \param port      The port
+ * \param signature The signature to request for
+ * \param blocks    The number of blocks to request.
+ * */
 void pixycam_2_sendblocks(sensor_port_t port, uint8_t signature, uint8_t blocks);
 
 /**
  * @} // End of group
  */
-
