@@ -31,14 +31,9 @@ typedef struct {
 
 // The struct of the detected pixycam block response. Contains the detection time and current block index to be parsed by calculate_task.
 typedef struct {
-    pixycam2_block_response_t pixycam_block_response[PIXYCAM_RESPONSE_THRESHOLD];
-    SYSTIM detection_time;
-    uint8_t current_block_index;
-    SYSTIM timestamps[PIXYCAM_RESPONSE_THRESHOLD];
+    int y;
+    SYSTIM timestamp;
 } detected_pixycam_block_t;
-
-// A pixycam block array of size threshold, that is able to hold threshold anount of blocks.
-pixycam2_block_t pixycamBlockArray[PIXYCAM_RESPONSE_THRESHOLD][PIXYCAM_BLOCK_THRESHOLD];
 
 int8_t direction = 1;
 
@@ -50,7 +45,7 @@ void write_string(const char *arr, bool_t top) {
 }
 
 // Global variable for the block that was detected
-detected_pixycam_block_t detected_block;
+detected_pixycam_block_t detected_block[PIXYCAM_RESPONSE_THRESHOLD];
 
 // Global variable for the detect_task block index. This value is set by detect_task and shoot_task
 uint8_t detect_task_block_index = 0;
@@ -64,10 +59,6 @@ void detect_task(intptr_t unused) {
 
     // Initialize the pixycam
     ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
-
-    // Initialize detected_block's values and set the pixycam block array
-    detected_block.detection_time = 0;
-    detected_block.pixycam_block_response[0].blocks = pixycamBlockArray[0];
 
     // Declare and assign signature and num_blocks variables
     block_signature_t signatures = SIGNATURE_1;
@@ -104,7 +95,7 @@ void detect_task(intptr_t unused) {
     syslog(LOG_NOTICE, "Test 1");
 #endif
 
-        if(detected_block.pixycam_block_response[detect_task_block_index].header.payload_length == 0)
+        if(pixycam_response.header.payload_length == 0)
             continue; // Time: 17
 
 #ifdef DEBUG
@@ -119,11 +110,11 @@ void detect_task(intptr_t unused) {
         break;
 
         // Get the detection time
-        get_tim(&detected_block.detection_time); // Time: 17
+        get_tim(&detected_block[detect_task_block_index].timestamp); // Time: 17
 
         // In order for the calculate_task to grab the index of the current block, set it in the data structure
         // This is necessary as detect_task_block_index will be incremented, and therefore reference the next block
-        detected_block.current_block_index = detect_task_block_index;
+        detected_block[detect_task_block_index].current_block_index = detect_task_block_index;
 
         // Increment the detect_task_block_index for detect_task to know where the next block should be read to
         ++detect_task_block_index; // Time: 17
