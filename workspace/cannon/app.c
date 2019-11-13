@@ -12,7 +12,8 @@
 #include <math.h>
 
 #define GRAVITY_PIXELS 0.002804285714285714 // Measured in pixels/ms
-#define PIXYCAM_BLOCK_THRESHOLD 5 // The maximum amount of pixycam blocks we can detect
+#define PIXYCAM_RESPONSE_THRESHOLD 5 // The maximum amount of responses that we want to retrieve
+#define PIXYCAM_BLOCK_THRESHOLD 5 // The maximum amount of pixycam blocks we want to retrieve in the response
 #define POINT_OF_IMPACT 281 // the calculated point of impact at a distance of a meter
 #define GEARING 5
 #define MOTOR_ROTATION_MILLIS 500
@@ -30,13 +31,13 @@ typedef struct {
 
 // The struct of the detected pixycam block response. Contains the detection time and current block index to be parsed by calculate_task.
 typedef struct {
-    pixycam2_block_response_t pixycam_block_response[PIXYCAM_BLOCK_THRESHOLD];
+    pixycam2_block_response_t pixycam_block_response[PIXYCAM_RESPONSE_THRESHOLD];
     SYSTIM detection_time;
     uint8_t current_block_index;
 } detected_pixycam_block_t;
 
 // A pixycam block array of size threshold, that is able to hold threshold anount of blocks.
-pixycam2_block_t pixycamBlockArray[PIXYCAM_BLOCK_THRESHOLD][PIXYCAM_BLOCK_THRESHOLD];
+pixycam2_block_t pixycamBlockArray[PIXYCAM_RESPONSE_THRESHOLD][PIXYCAM_BLOCK_THRESHOLD];
 
 int8_t direction = 1;
 
@@ -63,9 +64,8 @@ void detect_task(intptr_t unused) {
     // Initialize the pixycam
     ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
 
-    // Initialize detected_block's values
+    // Initialize detected_block's values and set the pixycam block array
     detected_block.detection_time = 0;
-
     detected_block.pixycam_block_response[0].blocks = pixycamBlockArray[0];
 
     // Declare and assign signature and num_blocks variables
@@ -94,21 +94,14 @@ void detect_task(intptr_t unused) {
         
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
-                    #ifdef DEBUG
+#ifdef DEBUG
     syslog(LOG_NOTICE, "Test 1");
-#endif
-
-        char debug[50];
-        sprintf(debug, "TEST SIZE: %d", sizeof(detected_block.pixycam_block_response[detect_task_block_index].blocks));
-
-                            #ifdef DEBUG
-    syslog(LOG_NOTICE, debug);
 #endif
 
         if(detected_block.pixycam_block_response[detect_task_block_index].header.payload_length == 0)
             continue; // Time: 17
 
-                    #ifdef DEBUG
+#ifdef DEBUG
     syslog(LOG_NOTICE, "Test 2");
 #endif
         break;
