@@ -70,8 +70,8 @@ void detect_task(intptr_t unused) {
         pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
         
         // Sleep to let other tasks do some processing
-        tslp_tsk(17); // Time: 17
-        pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1);
+        while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
+            tslp_tsk(2);
         
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
@@ -146,9 +146,12 @@ void calculate_task(intptr_t unused) {
 #endif
 
     SYSTIM old = 0;
-
     SYSTIM current_time_to_shoot = 0;
     uint16_t y_0 = -1, y_1 = -1;
+
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Calculate task init finished");
+#endif
 
     while (true) {
 
