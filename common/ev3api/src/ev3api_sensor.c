@@ -594,11 +594,7 @@ int8_t pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *des
 	return 1;
 }
 
-<<<<<<< HEAD
 int8_t pixycam_2_sendblocks(sensor_port_t port, uint8_t signature, uint8_t blocks){
-=======
-void pixycam_2_sendblocks(sensor_port_t port, uint8_t signature, uint8_t blocks){
->>>>>>> origin/Development
 	ER ercd;
 	pixycam2_request_get_blocks_t req;
 
