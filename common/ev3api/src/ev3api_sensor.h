@@ -491,7 +491,7 @@ void pixycam_2_get_blocks(sensor_port_t port, pixycam2_block_response_t *dest, u
  * \param dest      The destination to write to
  * \param blocks    The number of block which was requested.
  * */
-void pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t blocks);
+int8_t pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *dest, uint8_t blocks);
 
 /**
  * \~English
@@ -500,7 +500,7 @@ void pixycam_2_fetch_blocks(sensor_port_t port, pixycam2_block_response_t *dest,
  * \param signature The signature to request for
  * \param blocks    The number of blocks to request.
  * */
-void pixycam_2_sendblocks(sensor_port_t port, uint8_t signature, uint8_t blocks);
+int8_t pixycam_2_sendblocks(sensor_port_t port, uint8_t signature, uint8_t blocks);
 
 /**
  * @} // End of group
