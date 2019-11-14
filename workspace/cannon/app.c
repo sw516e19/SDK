@@ -22,22 +22,11 @@
 // Enable debugging
 #define DEBUG
 
-// A 2d vector with an x coordinate, y coordinate, and v for velocity
-
 // The struct of the detected pixycam block response. Contains the detection time and current block index to be parsed by calculate_task.
 typedef struct {
     uint16_t y;
     SYSTIM timestamp;
 } detected_pixycam_block_t;
-
-int8_t direction = 1;
-
-void write_string(const char *arr, bool_t top) {
-    ev3_lcd_set_font(EV3_FONT_MEDIUM);
-
-    int y = top ? 0 : EV3_LCD_HEIGHT / 2;
-    ev3_lcd_draw_string(arr, 0, y);
-}
 
 // Global variable for the block that was detected
 detected_pixycam_block_t detected_blocks[PIXYCAM_RESPONSE_THRESHOLD];
@@ -126,13 +115,13 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_mi
     // 1. Find average fall speed
     double v_avg = (y_1 - y_0) / millis;
 
-    // 2. Find v_0 by subtracting half the acceleration from the free fall equation, e.g. 0.5 * GRAVITY_PIXELS * pow(t / 2, 2)
-    double v_0 = v_avg - GRAVITY_PIXELS * millis;
+    // 2. Find v_0 by subtracting the gained velocity in half the sample time.
+    double v_0 = v_avg - GRAVITY_PIXELS * millis * 0.5;
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
-    int delta_t = round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
-    SYSTIM fall_time = *y0_millis_ptr + delta_t - PROJECTILE_TRAVEL_TIME;
+    int delta_time = round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
+    SYSTIM fall_time = *y0_millis_ptr + delta_time - PROJECTILE_TRAVEL_TIME;
 
     return fall_time;
 }
