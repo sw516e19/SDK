@@ -13,7 +13,7 @@
 
 #define GRAVITY_PIXELS 0.002804285714285714 // Measured in pixels/ms
 #define PIXYCAM_RESPONSE_THRESHOLD 5 // The maximum amount of responses that we want to retrieve
-#define PIXYCAM_BLOCK_THRESHOLD 5 // The maximum amount of pixycam blocks we want to retrieve in the response
+#define PIXYCAM_BLOCK_THRESHOLD 1 // The maximum amount of pixycam blocks we want to retrieve in the response
 #define POINT_OF_IMPACT 281 // the calculated point of impact at a distance of a meter
 #define GEARING 5
 #define MOTOR_ROTATION_MILLIS 500
@@ -77,7 +77,7 @@ void detect_task(intptr_t unused) {
 
         // If the threshold has been reached, do not allow getting blocks from the pixycam
         // Since arrays are 0-based, an array of size 5 would trigger an exception if the current index is 5
-        if (detect_task_block_index == PIXYCAM_BLOCK_THRESHOLD) { // Time: 0
+        if (detect_task_block_index == PIXYCAM_RESPONSE_THRESHOLD) { // Time: 0
             tslp_tsk(5);
             continue;
         }
@@ -87,7 +87,7 @@ void detect_task(intptr_t unused) {
         
         // Sleep to let other tasks do some processing
         tslp_tsk(17); // Time: 17
-        pixycam_2_fetch_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], 1);
+        pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1);
         
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
@@ -111,15 +111,11 @@ void detect_task(intptr_t unused) {
 
         // Get the detection time
         get_tim(&detected_block[detect_task_block_index].timestamp); // Time: 17
-
-        // In order for the calculate_task to grab the index of the current block, set it in the data structure
-        // This is necessary as detect_task_block_index will be incremented, and therefore reference the next block
-        detected_block[detect_task_block_index].current_block_index = detect_task_block_index;
+        detected_block[detect_task_block_index].y = pixycam_response.blocks[0].y_center;
 
         // Increment the detect_task_block_index for detect_task to know where the next block should be read to
         ++detect_task_block_index; // Time: 17
-
-        detected_block.pixycam_block_response[detect_task_block_index].blocks = pixycamBlockArray[detect_task_block_index];
+        
     }
 }
 
