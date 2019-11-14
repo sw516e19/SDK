@@ -23,15 +23,10 @@
 #define DEBUG
 
 // A 2d vector with an x coordinate, y coordinate, and v for velocity
-typedef struct {
-    double x;
-    int y;
-    double v;
-} vec_t;
 
 // The struct of the detected pixycam block response. Contains the detection time and current block index to be parsed by calculate_task.
 typedef struct {
-    int y;
+    uint16_t y;
     SYSTIM timestamp;
 } detected_pixycam_block_t;
 
@@ -45,7 +40,7 @@ void write_string(const char *arr, bool_t top) {
 }
 
 // Global variable for the block that was detected
-detected_pixycam_block_t detected_block[PIXYCAM_RESPONSE_THRESHOLD];
+detected_pixycam_block_t detected_blocks[PIXYCAM_RESPONSE_THRESHOLD];
 
 // Global variable for the detect_task block index. This value is set by detect_task and shoot_task
 uint8_t detect_task_block_index = 0;
@@ -110,8 +105,8 @@ void detect_task(intptr_t unused) {
         break;
 
         // Get the detection time
-        get_tim(&detected_block[detect_task_block_index].timestamp); // Time: 17
-        detected_block[detect_task_block_index].y = pixycam_response.blocks[0].y_center;
+        get_tim(&detected_blocks[detect_task_block_index].timestamp); // Time: 17
+        detected_blocks[detect_task_block_index].y = pixycam_response.blocks[0].y_center;
 
         // Increment the detect_task_block_index for detect_task to know where the next block should be read to
         ++detect_task_block_index; // Time: 17
@@ -144,9 +139,9 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_mi
 
 ulong_t new_blocks_available(SYSTIM *old_stamp) {
 
-    ulong_t result = detected_block.detection_time - *old_stamp;
+    ulong_t result = detected_blocks[detect_task_block_index].timestamp - *old_stamp;
 
-    old_stamp = detected_block.detection_time;
+    old_stamp = detected_blocks[detect_task_block_index].timestamp;
 
     return result;
 
@@ -179,7 +174,7 @@ void calculate_task(intptr_t unused) {
 #endif
        
         if(y_0 < 0){
-           y_0 = detected_block.pixycam_block_response[detected_block.current_block_index].blocks->y_center;
+           y_0 = detected_blocks[detect_task_block_index].y;
            continue;
         }
 
@@ -191,13 +186,13 @@ void calculate_task(intptr_t unused) {
         if(y_1_is_set) {
             y_0 = y_1;
         }
-        y_1 = detected_block.pixycam_block_response[detected_block.current_block_index].blocks->y_center;
+        y_1 = detected_blocks[detect_task_block_index].y;
 
 
         // weight by picture, so the first picture is the least weighted
-        current_time_to_shoot = get_time_until_impact(&y_0, &y_1, &old, &detected_block.detection_time);
+        current_time_to_shoot = get_time_until_impact(&y_0, &y_1, &old, &detected_blocks[detect_task_block_index].timestamp);
 
-        if(detected_block.current_block_index > 0) {
+        if(detect_task_block_index > 0) {
             time_to_shoot = (time_to_shoot + current_time_to_shoot) / 2;
         } else {
             time_to_shoot = current_time_to_shoot;
@@ -279,5 +274,4 @@ void shoot_task(intptr_t unused) {
 
     // At the end of shoot task, reset detect task's block index to 0
     detect_task_block_index = 0;
-    detected_block.pixycam_block_response[detect_task_block_index].blocks = pixycamBlockArray[detect_task_block_index];
 }
