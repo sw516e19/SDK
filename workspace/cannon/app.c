@@ -33,8 +33,15 @@ detected_pixycam_block_t detected_blocks[PIXYCAM_RESPONSE_THRESHOLD];
 // Global variable for the detect_task block index. This value is set by detect_task and shoot_task
 uint8_t detect_task_block_index = 0;
 
+// Global variable for trigger time
+uint8_t trigger_time = 90;
+
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
+    uint8_t incr = 5;
+    uint8_t decr = -5;
+    ev3_button_set_on_clicked(BRICK_BUTTON_DOWN, modify_trigger_time, decr);
+    ev3_button_set_on_clicked(BRICK_BUTTON_UP, modify_trigger_time, incr);
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task init");
@@ -182,7 +189,7 @@ void calculate_task(intptr_t unused) {
 
         y_0 = y_1;
 
-        time_to_shoot = firstDetect + avgfalltime - PROJECTILE_TRAVEL_TIME;
+        time_to_shoot = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
         
 
 
@@ -260,4 +267,8 @@ void shoot_task(intptr_t unused) {
 
     // At the end of shoot task, reset detect task's block index to 0
     detect_task_block_index = 0;
+}
+
+void modify_trigger_time(uint8_t *change) {
+    trigger_time = trigger_time + *change;
 }
