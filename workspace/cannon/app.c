@@ -177,7 +177,7 @@ void calculate_task(intptr_t unused) {
         offsetFromFirstDetect = detected_blocks[detect_task_block_index].timestamp - firstDetect + current_time_to_shoot;
 
         sumfall = sumfall + offsetFromFirstDetect;
-        avgfalltime = round((double)sumfall / detect_task_block_index);
+        avgfalltime = sumfall / detect_task_block_index;
         
 
         y_0 = y_1;
