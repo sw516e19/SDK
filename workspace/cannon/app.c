@@ -21,6 +21,37 @@
 // Enable debugging
 #define DEBUG
 
+// Enable WCRTA (Worst-case response time analysis)
+#define WCRTA
+
+// Global variable for trigger time
+uint8_t trigger_time = 90;
+
+// Function to modify the trigger time
+void modify_trigger_time(uint8_t *change) {
+    trigger_time = trigger_time + *change;
+}
+
+// The first task that is executed, which will perform initial setup that cannot be done in other tasks
+void init_task(intptr_t unused) {
+
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Started init task");
+#endif
+
+    // Create EV3 button clicked events
+    uint8_t incr = 5;
+    uint8_t decr = -5;
+    ev3_button_set_on_clicked(BRICK_BUTTON_DOWN, modify_trigger_time, decr);
+    ev3_button_set_on_clicked(BRICK_BUTTON_UP, modify_trigger_time, incr);
+
+
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Init task finished");
+#endif
+
+}
+
 // The struct of the detected pixycam block response. Contains the detection time and current block index to be parsed by calculate_task.
 typedef struct {
     uint16_t y;
@@ -33,15 +64,8 @@ detected_pixycam_block_t detected_blocks[PIXYCAM_RESPONSE_THRESHOLD];
 // Global variable for the detect_task block index. This value is set by detect_task and shoot_task
 uint8_t detect_task_block_index = 0;
 
-// Global variable for trigger time
-uint8_t trigger_time = 90;
-
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
-    uint8_t incr = 5;
-    uint8_t decr = -5;
-    ev3_button_set_on_clicked(BRICK_BUTTON_DOWN, modify_trigger_time, decr);
-    ev3_button_set_on_clicked(BRICK_BUTTON_UP, modify_trigger_time, incr);
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task init");
@@ -267,8 +291,4 @@ void shoot_task(intptr_t unused) {
 
     // At the end of shoot task, reset detect task's block index to 0
     detect_task_block_index = 0;
-}
-
-void modify_trigger_time(uint8_t *change) {
-    trigger_time = trigger_time + *change;
 }

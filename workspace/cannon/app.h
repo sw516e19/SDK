@@ -81,6 +81,7 @@ extern "C" {
  */
 #ifndef TOPPERS_MACRO_ONLY
 
+extern void init_task(intptr_t exinf);
 extern void detect_task(intptr_t exinf);
 extern void calculate_task(intptr_t exinf);
 extern void shoot_task(intptr_t exinf);
