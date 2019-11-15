@@ -16,7 +16,6 @@
 #define PIXYCAM_BLOCK_THRESHOLD 1 // The maximum amount of pixycam blocks we want to retrieve in the response
 #define POINT_OF_IMPACT 281 // the calculated point of impact at a distance of a meter
 #define GEARING 5
-#define MOTOR_ROTATION_MILLIS 500
 #define PROJECTILE_TRAVEL_TIME 135
 
 // Enable debugging
@@ -46,7 +45,6 @@ void detect_task(intptr_t unused) {
 
     // Declare and assign signature and num_blocks variables
     block_signature_t signatures = SIGNATURE_1;
-    uint8_t num_blocks = 1;
 
     pixycam2_block_t pixycam_block[PIXYCAM_BLOCK_THRESHOLD];
     pixycam2_block_response_t pixycam_response;
@@ -103,7 +101,7 @@ void detect_task(intptr_t unused) {
     }
 }
 
-SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_millis_ptr, SYSTIM *y1_millis_ptr) {
+int32_t calculate_fallduration(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_millis_ptr, SYSTIM *y1_millis_ptr) {
 
     // Dereference the values. POTENTIALLY TURN TO PASS-BY-VALUE, LOOK THROUGH LATER
     uint16_t y_0 = *y_0_ptr;
@@ -120,10 +118,7 @@ SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_mi
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
-    int delta_time = round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
-    SYSTIM fall_time = *y0_millis_ptr + delta_time - PROJECTILE_TRAVEL_TIME;
-
-    return fall_time;
+    return round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
 }
 
 ulong_t new_blocks_available(SYSTIM *old_stamp) {
@@ -148,6 +143,10 @@ void calculate_task(intptr_t unused) {
     SYSTIM old = 0;
     SYSTIM current_time_to_shoot = 0;
     uint16_t y_0 = -1, y_1 = -1;
+    uint32_t sumfall = 0;
+    uint16_t avgfalltime = 0;
+    uint16_t offsetFromFirstDetect = 0;
+    SYSTIM firstDetect;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Calculate task init finished");
@@ -165,30 +164,25 @@ void calculate_task(intptr_t unused) {
         syslog(LOG_NOTICE, "Begin calculate on new block!");
 #endif
        
-        if(y_0 < 0){
+        if(y_0 == -1){
            y_0 = detected_blocks[detect_task_block_index].y;
+           firstDetect = detected_blocks[detect_task_block_index].timestamp;
            continue;
         }
 
-        // 1. check if y_1 is set, if not, set it
-        // 2. if y_1 is set, do y_0 = y_1 and then set y_1
-        // 3. calculate
-        bool_t y_1_is_set = y_1 >= 0;
-        
-        if(y_1_is_set) {
-            y_0 = y_1;
-        }
         y_1 = detected_blocks[detect_task_block_index].y;
 
+        current_time_to_shoot = calculate_fallduration(&y_0, &y_1, &old, &detected_blocks[detect_task_block_index].timestamp);
+        
+        offsetFromFirstDetect = detected_blocks[detect_task_block_index].timestamp - firstDetect + current_time_to_shoot;
 
-        // weight by picture, so the first picture is the least weighted
-        current_time_to_shoot = get_time_until_impact(&y_0, &y_1, &old, &detected_blocks[detect_task_block_index].timestamp);
+        sumfall = sumfall + offsetFromFirstDetect;
+        avgfalltime = sumfall / detect_task_block_index;
+        
 
-        if(detect_task_block_index > 0) {
-            time_to_shoot = (time_to_shoot + current_time_to_shoot) / 2;
-        } else {
-            time_to_shoot = current_time_to_shoot;
-        }
+        y_0 = y_1;
+
+        time_to_shoot = firstDetect + avgfalltime - PROJECTILE_TRAVEL_TIME;
         
 
 
