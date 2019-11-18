@@ -143,16 +143,6 @@ int32_t calculate_fallduration(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_
     return round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
 }
 
-ulong_t new_blocks_available(SYSTIM *old_stamp) {
-
-    ulong_t result = detected_blocks[detect_task_block_index].timestamp - *old_stamp;
-
-    old_stamp = detected_blocks[detect_task_block_index].timestamp;
-
-    return result;
-
-}
-
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
 void calculate_task(intptr_t unused) {
 
@@ -204,10 +194,9 @@ void calculate_task(intptr_t unused) {
         sumfall = sumfall + offsetFromFirstDetect;
         avgfalltime = sumfall / count;
 
-        time_to_shoot = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
+        calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
         
         //Write data to queue
-        calculated_deadlines[queue_index] = time_to_shoot;
         snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
         queue_index++;
         if(queue_index > CALCDATAQUEUESIZE)
