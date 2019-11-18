@@ -68,7 +68,6 @@ void detect_task(intptr_t unused) {
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task init");
 #endif
-
     // Initialize the pixycam
     ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
 
@@ -80,13 +79,14 @@ void detect_task(intptr_t unused) {
     pixycam_response.blocks = pixycam_block;
     uint8_t index = 0;
 
+    pixycam_response.header.payload_length = 0;
+
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task finished init");
 #endif
 
     // Begin detect_task loop
     while (true) {
-
         // Call get blocks
         pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
         
@@ -96,16 +96,8 @@ void detect_task(intptr_t unused) {
         
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Test 1");
-#endif
-
-        if(pixycam_response.header.payload_length == 0)
+        if(pixycam_response.header.payload_length == 0 || pixycam_response.blocks->signature != signatures) 
             continue; // Time: 17
-
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Test 2");
-#endif
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Detected block!");
@@ -115,11 +107,28 @@ void detect_task(intptr_t unused) {
         get_tim(&detected_blocks[index].timestamp); // Time: 17
         detected_blocks[index].y = pixycam_response.blocks[0].y_center;
 
+        #ifdef DEBUG
+            syslog(LOG_NOTICE, "block addr: %l", (long) &detected_blocks[index]);
+            if(detected_blocks[0].timestamp != NULL){
+                    syslog(LOG_NOTICE, "0 addr: %l", (long) &detected_blocks[0]);
+                }
+                if(detected_blocks[1].timestamp != NULL){
+                    syslog(LOG_NOTICE, "1 addr: %l", (long) &detected_blocks[1]);
+                }
+                if(detected_blocks[2].timestamp != NULL){
+                    syslog(LOG_NOTICE, "2 addr: %l", (long) &detected_blocks[2]);
+                }
+                if(detected_blocks[3].timestamp != NULL){
+                    syslog(LOG_NOTICE, "3 addr: %l", (long) &detected_blocks[3]);
+                }
+        #endif
         snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
         index++;
         if(index > CAMDATAQUEUESIZE) {
             index = 0;
-        }        
+        }
+
+        pixycam_response.header.payload_length = 0;     
     }
 }
 
@@ -157,34 +166,61 @@ void calculate_task(intptr_t unused) {
     uint16_t count;
     SYSTIM firstDetect;
     uint8_t queue_index = 0;
+    ER ercd;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Calculate task init finished");
 #endif
+    intptr_t current_ptr;
     detected_pixycam_block_t *currentdata, *olddata;
 
     while (true) {
-
         //TODO: Add timeout.
-        rcv_dtq(CAMDATAQUEUE, currentdata);
+        rcv_dtq(CAMDATAQUEUE, &current_ptr);
+        
+        currentdata = (detected_pixycam_block_t*)&current_ptr;
 
+        #ifdef DEBUG
+                syslog(LOG_NOTICE, "Begin calculate on new block!");
+                syslog(LOG_NOTICE, "timestamp: %u", currentdata->timestamp);
+                
+        #endif
 
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Begin calculate on new block!");
-#endif
-
-        if(olddata == NULL) {
+        if(olddata->timestamp == 0) {
             firstDetect = currentdata->timestamp;
-            olddata = currentdata;
+            olddata->timestamp = currentdata->timestamp;
+            olddata->y = currentdata->y;
             count = 0;
             continue;
         }
+
+            #ifdef DEBUG
+                syslog(LOG_NOTICE, "12345");
+                syslog(LOG_NOTICE, "TMSTMP: %u", currentdata);
+            #endif
+        
+        if(currentdata->timestamp == 0){
+            #ifdef DEBUG
+                syslog(LOG_NOTICE, "BIAAATCH");
+            #endif
+        }
+
+                    #ifdef DEBUG
+                syslog(LOG_NOTICE, "1234");
+            #endif
+
         if(currentdata->timestamp - olddata->timestamp > 1000) {
+            #ifdef DEBUG
+                syslog(LOG_NOTICE, "1");
+            #endif
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
             count = 0;
             continue;
         }
+        #ifdef DEBUG
+                syslog(LOG_NOTICE, "2");
+        #endif
 
         current_time_to_shoot = calculate_fallduration(&olddata->y, &currentdata->y, &olddata->timestamp, &currentdata->timestamp);
         
@@ -240,14 +276,17 @@ void shoot_task(intptr_t unused) {
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
 
     while(true) {
-
+        #ifdef DEBUG
+            syslog(LOG_NOTICE, "Shoot task loop");
+        #endif
         /*while( !motor_running && time_to_shoot == 0 )
         tslp_tsk(1);*/
-        get_tim(&now);
+        
         ercd = trcv_dtq(CALCDATAQUEUE, &new_data, 2);
         if(ercd != E_TMOUT){
             time_to_shoot = new_data;
         }
+        get_tim(&now);
 
         await_trigger_time = now < time_to_shoot;
         await_trigger_preparation = motor_running || time_to_shoot == 0;
