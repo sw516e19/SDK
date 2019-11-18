@@ -59,7 +59,7 @@ typedef struct {
 } detected_pixycam_block_t;
 
 // Global variable for the block that was detected
-detected_pixycam_block_t detected_blocks[PIXYCAM_RESPONSE_THRESHOLD];
+detected_pixycam_block_t detected_blocks[CAMDATAQUEUESIZE + 1];
 
 // Global variable for the detect_task block index. This value is set by detect_task and shoot_task
 uint8_t detect_task_block_index = 0;
@@ -80,6 +80,7 @@ void detect_task(intptr_t unused) {
     pixycam2_block_t pixycam_block[PIXYCAM_BLOCK_THRESHOLD];
     pixycam2_block_response_t pixycam_response;
     pixycam_response.blocks = pixycam_block;
+    uint8_t index = 0;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task finished init");
@@ -120,8 +121,14 @@ void detect_task(intptr_t unused) {
 #endif
 
         // Get the detection time
-        get_tim(&detected_blocks[detect_task_block_index].timestamp); // Time: 17
-        detected_blocks[detect_task_block_index].y = pixycam_response.blocks[0].y_center;
+        get_tim(&detected_blocks[index].timestamp); // Time: 17
+        detected_blocks[index].y = pixycam_response.blocks[0].y_center;
+
+        snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
+        index++;
+        if(index > CAMDATAQUEUESIZE) {
+            index = 0;
+        }
 
         // Increment the detect_task_block_index for detect_task to know where the next block should be read to
         ++detect_task_block_index; // Time: 17
