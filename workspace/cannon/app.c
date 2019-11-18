@@ -261,7 +261,7 @@ void shoot_task(intptr_t unused) {
         motor_running = true;
 
 
-        while(ev3_motor_get_counts(EV3_PORT_A) != ((360 * GEARING) - 5)){
+        while(ev3_motor_get_counts(EV3_PORT_A) < ((360 * GEARING) - 5)){
             tslp_tsk(20);
 
             ev3_motor_reset_counts(EV3_PORT_A);
