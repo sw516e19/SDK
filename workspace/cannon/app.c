@@ -96,8 +96,11 @@ void detect_task(intptr_t unused) {
         
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
-        if(pixycam_response.header.payload_length == 0 || pixycam_response.blocks->signature != signatures) 
+        if(pixycam_response.header.payload_length == 0) 
             continue; // Time: 17
+
+        if(pixycam_response.blocks[0].signature != signatures)
+            continue;
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Detected block!");
@@ -106,29 +109,18 @@ void detect_task(intptr_t unused) {
         // Get the detection time
         get_tim(&detected_blocks[index].timestamp); // Time: 17
         detected_blocks[index].y = pixycam_response.blocks[0].y_center;
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Timestamp set: %lu", detected_blocks[index].timestamp);
+#endif
 
-        #ifdef DEBUG
-            syslog(LOG_NOTICE, "block addr: %l", (long) &detected_blocks[index]);
-            if(detected_blocks[0].timestamp != NULL){
-                    syslog(LOG_NOTICE, "0 addr: %l", (long) &detected_blocks[0]);
-                }
-                if(detected_blocks[1].timestamp != NULL){
-                    syslog(LOG_NOTICE, "1 addr: %l", (long) &detected_blocks[1]);
-                }
-                if(detected_blocks[2].timestamp != NULL){
-                    syslog(LOG_NOTICE, "2 addr: %l", (long) &detected_blocks[2]);
-                }
-                if(detected_blocks[3].timestamp != NULL){
-                    syslog(LOG_NOTICE, "3 addr: %l", (long) &detected_blocks[3]);
-                }
-        #endif
         snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
         index++;
         if(index > CAMDATAQUEUESIZE) {
             index = 0;
         }
 
-        pixycam_response.header.payload_length = 0;     
+        pixycam_response.header.payload_length = 0;  
+        pixycam_response.blocks[0].signature = -1;   
     }
 }
 
@@ -178,13 +170,37 @@ void calculate_task(intptr_t unused) {
         //TODO: Add timeout.
         rcv_dtq(CAMDATAQUEUE, &current_ptr);
         
-        currentdata = (detected_pixycam_block_t*)&current_ptr;
+        currentdata = (detected_pixycam_block_t*)current_ptr;
+#ifdef DEBUG
+        if (detected_blocks[0].timestamp != NULL)
+        {
+            syslog(LOG_NOTICE, "Timestamp0: %lu", detected_blocks[0].timestamp);
+            syslog(LOG_NOTICE, "Ts loc0: %lu", &detected_blocks[0]);
+        }
+        if (detected_blocks[1].timestamp != NULL)
+        {
+            syslog(LOG_NOTICE, "Timestamp1: %lu", detected_blocks[1].timestamp);
+            syslog(LOG_NOTICE, "Ts loc1: %lu", &detected_blocks[1]);
+        }
+        if (detected_blocks[2].timestamp != NULL)
+        {
+            syslog(LOG_NOTICE, "Timestamp2: %lu", detected_blocks[2].timestamp);
+            syslog(LOG_NOTICE, "Ts loc2: %lu", &detected_blocks[2]);
+        }
+        if (detected_blocks[3].timestamp != NULL)
+        {
+            syslog(LOG_NOTICE, "Timestamp3: %lu", detected_blocks[3].timestamp);
+            syslog(LOG_NOTICE, "Ts loc3: %lu", &detected_blocks[3]);
+        }
+        syslog(LOG_NOTICE, "Ptr: %lu", current_ptr);
+        syslog(LOG_NOTICE, "currentdata: %lu", currentdata);
+#endif
 
-        #ifdef DEBUG
-                syslog(LOG_NOTICE, "Begin calculate on new block!");
-                syslog(LOG_NOTICE, "timestamp: %u", currentdata->timestamp);
-                
-        #endif
+#ifdef DEBUG
+            syslog(LOG_NOTICE, "Begin calculate on new block!");
+        syslog(LOG_NOTICE, "timestamp: %u", currentdata->timestamp);
+
+#endif
 
         if(olddata->timestamp == 0) {
             firstDetect = currentdata->timestamp;
