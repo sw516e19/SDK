@@ -60,6 +60,7 @@ typedef struct {
 
 // Global variable for the block that was detected
 detected_pixycam_block_t detected_blocks[CAMDATAQUEUESIZE + 1];
+SYSTIM calculated_deadlines[CALCDATAQUEUESIZE + 1];
 
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
@@ -142,18 +143,6 @@ int32_t calculate_fallduration(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_
     return round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
 }
 
-ulong_t new_blocks_available(SYSTIM *old_stamp) {
-
-    ulong_t result = detected_blocks[detect_task_block_index].timestamp - *old_stamp;
-
-    old_stamp = detected_blocks[detect_task_block_index].timestamp;
-
-    return result;
-
-}
-
-SYSTIM time_to_shoot = 0;
-
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
 void calculate_task(intptr_t unused) {
 
@@ -167,6 +156,7 @@ void calculate_task(intptr_t unused) {
     uint16_t offsetFromFirstDetect = 0;
     uint16_t count;
     SYSTIM firstDetect;
+    uint8_t queue_index = 0;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Calculate task init finished");
@@ -204,8 +194,14 @@ void calculate_task(intptr_t unused) {
         sumfall = sumfall + offsetFromFirstDetect;
         avgfalltime = sumfall / count;
 
-        time_to_shoot = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
+        calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
         
+        //Write data to queue
+        snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
+        queue_index++;
+        if(queue_index > CALCDATAQUEUESIZE)
+            queue_index = 0;
+
 
 
 #ifdef DEBUG
@@ -237,7 +233,9 @@ void shoot_task(intptr_t unused) {
     SYSTIM now;
     bool_t await_trigger_time = false;
     bool_t await_trigger_preparation = false;
-
+    SYSTIM new_data;
+    SYSTIM time_to_shoot = 0;
+    ER ercd;
     // Initialize the motor
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
 
@@ -246,13 +244,16 @@ void shoot_task(intptr_t unused) {
         /*while( !motor_running && time_to_shoot == 0 )
         tslp_tsk(1);*/
         get_tim(&now);
+        ercd = trcv_dtq(CALCDATAQUEUE, &new_data, 2);
+        if(ercd != E_TMOUT){
+            time_to_shoot = new_data;
+        }
 
         await_trigger_time = now < time_to_shoot;
         await_trigger_preparation = motor_running || time_to_shoot == 0;
 
 
         if(await_trigger_preparation || await_trigger_time) {
-            tslp_tsk(1);
             continue;
         }
 
