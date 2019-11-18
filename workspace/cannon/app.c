@@ -112,15 +112,12 @@ void detect_task(intptr_t unused) {
             continue; // Time: 17
 
 #ifdef DEBUG
-    syslog(LOG_NOTICE, "Test 2");
+        syslog(LOG_NOTICE, "Test 2");
 #endif
-        break;
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Detected block!");
 #endif
-
-        break;
 
         // Get the detection time
         get_tim(&detected_blocks[detect_task_block_index].timestamp); // Time: 17
