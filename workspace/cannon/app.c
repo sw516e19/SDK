@@ -175,11 +175,11 @@ void calculate_task(intptr_t unused) {
 
     while (true) {
 
-        // if no new block is available, simply sleep
-        if (!(new_blocks_available(&old))) {
-            tslp_tsk(5);
-            continue;
-        }
+        detected_pixycam_block_t *currentdata;
+
+        //TODO: Add timeout.
+        rcv_dtq(CAMDATAQUEUE, currentdata);
+
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Begin calculate on new block!");
@@ -268,17 +268,4 @@ void shoot_task(intptr_t unused) {
         
     }
 
-     
-    //shoot, reload, set time_to_shoot to 0
-
-    // Use the motor to fire the projectile
-    
-    // 0. Wait for available time to shoot through the global variable
-    
-    // 1. shoot when time is reached 
-
-    // 2. (then lower shoot tasks priority?)
-
-    // At the end of shoot task, reset detect task's block index to 0
-    detect_task_block_index = 0;
 }
