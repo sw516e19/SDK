@@ -59,10 +59,7 @@ typedef struct {
 } detected_pixycam_block_t;
 
 // Global variable for the block that was detected
-detected_pixycam_block_t detected_blocks[PIXYCAM_RESPONSE_THRESHOLD];
-
-// Global variable for the detect_task block index. This value is set by detect_task and shoot_task
-uint8_t detect_task_block_index = 0;
+detected_pixycam_block_t detected_blocks[CAMDATAQUEUESIZE + 1];
 
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
@@ -80,6 +77,7 @@ void detect_task(intptr_t unused) {
     pixycam2_block_t pixycam_block[PIXYCAM_BLOCK_THRESHOLD];
     pixycam2_block_response_t pixycam_response;
     pixycam_response.blocks = pixycam_block;
+    uint8_t index = 0;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task finished init");
@@ -87,13 +85,6 @@ void detect_task(intptr_t unused) {
 
     // Begin detect_task loop
     while (true) {
-
-        // If the threshold has been reached, do not allow getting blocks from the pixycam
-        // Since arrays are 0-based, an array of size 5 would trigger an exception if the current index is 5
-        if (detect_task_block_index == PIXYCAM_RESPONSE_THRESHOLD) { // Time: 0
-            tslp_tsk(5);
-            continue;
-        }
 
         // Call get blocks
         pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
@@ -112,23 +103,22 @@ void detect_task(intptr_t unused) {
             continue; // Time: 17
 
 #ifdef DEBUG
-    syslog(LOG_NOTICE, "Test 2");
+        syslog(LOG_NOTICE, "Test 2");
 #endif
-        break;
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Detected block!");
 #endif
 
-        break;
-
         // Get the detection time
-        get_tim(&detected_blocks[detect_task_block_index].timestamp); // Time: 17
-        detected_blocks[detect_task_block_index].y = pixycam_response.blocks[0].y_center;
+        get_tim(&detected_blocks[index].timestamp); // Time: 17
+        detected_blocks[index].y = pixycam_response.blocks[0].y_center;
 
-        // Increment the detect_task_block_index for detect_task to know where the next block should be read to
-        ++detect_task_block_index; // Time: 17
-        
+        snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
+        index++;
+        if(index > CAMDATAQUEUESIZE) {
+            index = 0;
+        }        
     }
 }
 
@@ -171,47 +161,48 @@ void calculate_task(intptr_t unused) {
     syslog(LOG_NOTICE, "Calculate task init");
 #endif
 
-    SYSTIM old = 0;
-    SYSTIM current_time_to_shoot = 0;
-    uint16_t y_0 = -1, y_1 = -1;
+    uint32_t current_time_to_shoot = 0;
     uint32_t sumfall = 0;
     uint16_t avgfalltime = 0;
     uint16_t offsetFromFirstDetect = 0;
+    uint16_t count;
     SYSTIM firstDetect;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Calculate task init finished");
 #endif
+    detected_pixycam_block_t *currentdata, *olddata;
 
     while (true) {
 
-        // if no new block is available, simply sleep
-        if (!(new_blocks_available(&old))) {
-            tslp_tsk(5);
-            continue;
-        }
+        //TODO: Add timeout.
+        rcv_dtq(CAMDATAQUEUE, currentdata);
+
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Begin calculate on new block!");
 #endif
-       
-        if(y_0 == -1){
-           y_0 = detected_blocks[detect_task_block_index].y;
-           firstDetect = detected_blocks[detect_task_block_index].timestamp;
-           continue;
+
+        if(olddata == NULL) {
+            firstDetect = currentdata->timestamp;
+            olddata = currentdata;
+            count = 0;
+            continue;
+        }
+        if(currentdata->timestamp - olddata->timestamp > 1000) {
+            firstDetect = currentdata->timestamp;
+            olddata = currentdata;
+            count = 0;
+            continue;
         }
 
-        y_1 = detected_blocks[detect_task_block_index].y;
-
-        current_time_to_shoot = calculate_fallduration(&y_0, &y_1, &old, &detected_blocks[detect_task_block_index].timestamp);
+        current_time_to_shoot = calculate_fallduration(&olddata->y, &currentdata->y, &olddata->timestamp, &currentdata->timestamp);
         
-        offsetFromFirstDetect = detected_blocks[detect_task_block_index].timestamp - firstDetect + current_time_to_shoot;
+        offsetFromFirstDetect = currentdata->timestamp - firstDetect + current_time_to_shoot;
+        count++;
 
         sumfall = sumfall + offsetFromFirstDetect;
-        avgfalltime = sumfall / detect_task_block_index;
-        
-
-        y_0 = y_1;
+        avgfalltime = sumfall / count;
 
         time_to_shoot = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
         
@@ -278,17 +269,4 @@ void shoot_task(intptr_t unused) {
         
     }
 
-     
-    //shoot, reload, set time_to_shoot to 0
-
-    // Use the motor to fire the projectile
-    
-    // 0. Wait for available time to shoot through the global variable
-    
-    // 1. shoot when time is reached 
-
-    // 2. (then lower shoot tasks priority?)
-
-    // At the end of shoot task, reset detect task's block index to 0
-    detect_task_block_index = 0;
 }

@@ -63,6 +63,7 @@ extern "C" {
 #define HIGH_PRIORITY	9		/* 並行実行されるタスクの優先度 */
 #define MID_PRIORITY	10
 #define LOW_PRIORITY	11
+#define CAMDATAQUEUESIZE 3 
 
 /*
  *  ターゲットに依存する可能性のある定数の定義
