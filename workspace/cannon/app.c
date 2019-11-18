@@ -161,21 +161,19 @@ void calculate_task(intptr_t unused) {
     syslog(LOG_NOTICE, "Calculate task init");
 #endif
 
-    SYSTIM old = 0;
-    SYSTIM current_time_to_shoot = 0;
-    uint16_t y_0 = -1, y_1 = -1;
+    uint32_t current_time_to_shoot = 0;
     uint32_t sumfall = 0;
     uint16_t avgfalltime = 0;
     uint16_t offsetFromFirstDetect = 0;
+    uint16_t count;
     SYSTIM firstDetect;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Calculate task init finished");
 #endif
+    detected_pixycam_block_t *currentdata, *olddata;
 
     while (true) {
-
-        detected_pixycam_block_t *currentdata;
 
         //TODO: Add timeout.
         rcv_dtq(CAMDATAQUEUE, currentdata);
@@ -184,24 +182,27 @@ void calculate_task(intptr_t unused) {
 #ifdef DEBUG
         syslog(LOG_NOTICE, "Begin calculate on new block!");
 #endif
-       
-        if(y_0 == -1){
-           y_0 = detected_blocks[detect_task_block_index].y;
-           firstDetect = detected_blocks[detect_task_block_index].timestamp;
-           continue;
+
+        if(olddata == NULL) {
+            firstDetect = currentdata->timestamp;
+            olddata = currentdata;
+            count = 0;
+            continue;
+        }
+        if(currentdata->timestamp - olddata->timestamp > 1000) {
+            firstDetect = currentdata->timestamp;
+            olddata = currentdata;
+            count = 0;
+            continue;
         }
 
-        y_1 = detected_blocks[detect_task_block_index].y;
-
-        current_time_to_shoot = calculate_fallduration(&y_0, &y_1, &old, &detected_blocks[detect_task_block_index].timestamp);
+        current_time_to_shoot = calculate_fallduration(&olddata->y, &currentdata->y, &olddata->timestamp, &currentdata->timestamp);
         
-        offsetFromFirstDetect = detected_blocks[detect_task_block_index].timestamp - firstDetect + current_time_to_shoot;
+        offsetFromFirstDetect = currentdata->timestamp - firstDetect + current_time_to_shoot;
+        count++;
 
         sumfall = sumfall + offsetFromFirstDetect;
-        avgfalltime = sumfall / detect_task_block_index;
-        
-
-        y_0 = y_1;
+        avgfalltime = sumfall / count;
 
         time_to_shoot = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
         
