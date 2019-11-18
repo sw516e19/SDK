@@ -61,9 +61,6 @@ typedef struct {
 // Global variable for the block that was detected
 detected_pixycam_block_t detected_blocks[CAMDATAQUEUESIZE + 1];
 
-// Global variable for the detect_task block index. This value is set by detect_task and shoot_task
-uint8_t detect_task_block_index = 0;
-
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
 
@@ -88,13 +85,6 @@ void detect_task(intptr_t unused) {
 
     // Begin detect_task loop
     while (true) {
-
-        // If the threshold has been reached, do not allow getting blocks from the pixycam
-        // Since arrays are 0-based, an array of size 5 would trigger an exception if the current index is 5
-        if (detect_task_block_index == PIXYCAM_RESPONSE_THRESHOLD) { // Time: 0
-            tslp_tsk(5);
-            continue;
-        }
 
         // Call get blocks
         pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
@@ -128,11 +118,7 @@ void detect_task(intptr_t unused) {
         index++;
         if(index > CAMDATAQUEUESIZE) {
             index = 0;
-        }
-
-        // Increment the detect_task_block_index for detect_task to know where the next block should be read to
-        ++detect_task_block_index; // Time: 17
-        
+        }        
     }
 }
 
