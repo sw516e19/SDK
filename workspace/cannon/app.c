@@ -196,9 +196,6 @@ void calculate_task(intptr_t unused) {
             count = 0;
             continue;
         }
-        #ifdef DEBUG
-                syslog(LOG_NOTICE, "2");
-        #endif
 
         current_time_to_shoot = calculate_fallduration(&olddata->y, &currentdata->y, &olddata->timestamp, &currentdata->timestamp);
         
@@ -254,9 +251,6 @@ void shoot_task(intptr_t unused) {
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
 
     while(true) {
-        #ifdef DEBUG
-            syslog(LOG_NOTICE, "Shoot task loop");
-        #endif
         /*while( !motor_running && time_to_shoot == 0 )
         tslp_tsk(1);*/
         
