@@ -206,7 +206,7 @@ void calculate_task(intptr_t unused) {
         avgfalltime = sumfall / count;
 
         calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
-        
+
         //Write data to queue
         snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
         queue_index++;
@@ -240,44 +240,32 @@ void shoot_task(intptr_t unused) {
     syslog(LOG_NOTICE, "Shoot task init");
 #endif
 
-    bool_t motor_running = false;
     SYSTIM now;
-    bool_t await_trigger_time = false;
-    bool_t await_trigger_preparation = false;
-    SYSTIM new_data;
+    SYSTIM *new_data;
+    intptr_t pointer;
     SYSTIM time_to_shoot = 0;
     ER ercd;
     // Initialize the motor
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
 
     while(true) {
-        /*while( !motor_running && time_to_shoot == 0 )
-        tslp_tsk(1);*/
         
-        ercd = trcv_dtq(CALCDATAQUEUE, &new_data, 2);
+        ercd = trcv_dtq(CALCDATAQUEUE, &pointer, 2);
+        new_data = (SYSTIM *)pointer;
         if(ercd != E_TMOUT){
             time_to_shoot = new_data;
         }
-        get_tim(&now);
+        get_tim(&now); 
 
-        await_trigger_time = now < time_to_shoot;
-        await_trigger_preparation = motor_running || time_to_shoot == 0;
-
-
-        if(await_trigger_preparation || await_trigger_time) {
+        if(time_to_shoot == 0) {
+            continue;
+        }
+        if (now < time_to_shoot) {
             continue;
         }
 
-        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, false);
-        motor_running = true;
-
-
-        while(ev3_motor_get_counts(EV3_PORT_A) < ((360 * GEARING) - 5)){
-            tslp_tsk(20);
-
-            ev3_motor_reset_counts(EV3_PORT_A);
-            motor_running = false;
-        }
+        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
+        time_to_shoot = 0;
         
     }
 
