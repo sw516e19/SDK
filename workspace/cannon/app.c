@@ -26,10 +26,21 @@
 
 // Global variable for trigger time
 uint8_t trigger_time = 90;
+// Gobal has sooted
+uint8_t shoot = 0; 
 
 // Function to modify the trigger time
-void modify_trigger_time(uint8_t *change) {
-    trigger_time = trigger_time + *change;
+void modify_trigger_time(intptr_t datapointer) {
+    int16_t addtime = (int8_t)datapointer;
+    
+    trigger_time = trigger_time + addtime;
+}
+void rotate_moter(intptr_t datapointer){
+    int16_t rotate =  (int8_t)datapointer;
+#ifdef DEBUG
+    syslog(LOG_NOTICE," %d change",rotate);
+#endif
+    ev3_motor_rotate(EV3_PORT_A, rotate * GEARING, 100, true);
 }
 
 // The first task that is executed, which will perform initial setup that cannot be done in other tasks
@@ -40,10 +51,12 @@ void init_task(intptr_t unused) {
 #endif
 
     // Create EV3 button clicked events
-    uint8_t incr = 5;
-    uint8_t decr = -5;
+    int8_t incr = 5;
+    int8_t decr = -5;
     ev3_button_set_on_clicked(BRICK_BUTTON_DOWN, modify_trigger_time, decr);
     ev3_button_set_on_clicked(BRICK_BUTTON_UP, modify_trigger_time, incr);
+    ev3_button_set_on_clicked(BRICK_BUTTON_LEFT,rotate_moter, incr);
+    ev3_button_set_on_clicked(BRICK_BUTTON_RIGHT,rotate_moter, decr);
 
 
 #ifdef DEBUG
@@ -159,6 +172,7 @@ void calculate_task(intptr_t unused) {
     SYSTIM firstDetect;
     uint8_t queue_index = 0;
     ER ercd;
+    SYSTIM timenow; 
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Calculate task init finished");
@@ -206,6 +220,13 @@ void calculate_task(intptr_t unused) {
         avgfalltime = sumfall / count;
 
         calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
+        get_tim(&timenow);
+        if(timenow > calculated_deadlines[queue_index]){
+#ifdef DEBUG
+            syslog(LOG_NOTICE, "timenow is bigger end calculated deadline");
+#endif
+            continue;
+        }
 
         //Write data to queue
         snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
@@ -255,7 +276,11 @@ void shoot_task(intptr_t unused) {
         new_data = (SYSTIM *)pointer;
         if(ercd != E_TMOUT){
             time_to_shoot = *new_data;
+            #ifdef DEBUG
+            syslog(LOG_NOTICE, "receive new tts");
+            #endif 
         }
+
         get_tim(&now); 
 
         if(time_to_shoot == 0) {
@@ -264,7 +289,14 @@ void shoot_task(intptr_t unused) {
         if (now < time_to_shoot) {
             continue;
         }
-
+        if (shoot != 0){
+            shoot = 0; 
+          
+        }
+        shoot = 1; 
+         #ifdef DEBUG
+            syslog(LOG_NOTICE, "Shooting");
+            #endif 
         ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
         time_to_shoot = 0;
         
