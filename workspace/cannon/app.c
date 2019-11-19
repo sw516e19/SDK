@@ -216,6 +216,7 @@ void calculate_task(intptr_t unused) {
 
 
 #ifdef DEBUG
+        syslog(LOG_NOTICE, "Calc shoot: %lu", calculated_deadlines[queue_index]);
         syslog(LOG_NOTICE, "Finished calculating on block!");
 #endif
 
@@ -253,7 +254,7 @@ void shoot_task(intptr_t unused) {
         ercd = trcv_dtq(CALCDATAQUEUE, &pointer, 2);
         new_data = (SYSTIM *)pointer;
         if(ercd != E_TMOUT){
-            time_to_shoot = new_data;
+            time_to_shoot = *new_data;
         }
         get_tim(&now); 
 
