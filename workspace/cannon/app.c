@@ -164,7 +164,7 @@ void calculate_task(intptr_t unused) {
     syslog(LOG_NOTICE, "Calculate task init finished");
 #endif
     intptr_t current_ptr;
-    detected_pixycam_block_t *currentdata, *olddata;
+    detected_pixycam_block_t *currentdata, *olddata = NULL;
 
     while (true) {
         //TODO: Add timeout.
@@ -172,63 +172,25 @@ void calculate_task(intptr_t unused) {
         
         currentdata = (detected_pixycam_block_t*)current_ptr;
 #ifdef DEBUG
-        if (detected_blocks[0].timestamp != NULL)
-        {
-            syslog(LOG_NOTICE, "Timestamp0: %lu", detected_blocks[0].timestamp);
-            syslog(LOG_NOTICE, "Ts loc0: %lu", &detected_blocks[0]);
-        }
-        if (detected_blocks[1].timestamp != NULL)
-        {
-            syslog(LOG_NOTICE, "Timestamp1: %lu", detected_blocks[1].timestamp);
-            syslog(LOG_NOTICE, "Ts loc1: %lu", &detected_blocks[1]);
-        }
-        if (detected_blocks[2].timestamp != NULL)
-        {
-            syslog(LOG_NOTICE, "Timestamp2: %lu", detected_blocks[2].timestamp);
-            syslog(LOG_NOTICE, "Ts loc2: %lu", &detected_blocks[2]);
-        }
-        if (detected_blocks[3].timestamp != NULL)
-        {
-            syslog(LOG_NOTICE, "Timestamp3: %lu", detected_blocks[3].timestamp);
-            syslog(LOG_NOTICE, "Ts loc3: %lu", &detected_blocks[3]);
-        }
-        syslog(LOG_NOTICE, "Ptr: %lu", current_ptr);
-        syslog(LOG_NOTICE, "currentdata: %lu", currentdata);
-#endif
-
-#ifdef DEBUG
-            syslog(LOG_NOTICE, "Begin calculate on new block!");
+        syslog(LOG_NOTICE, "Begin calculate on new block!");
         syslog(LOG_NOTICE, "timestamp: %u", currentdata->timestamp);
-
 #endif
 
-        if(olddata->timestamp == 0) {
+        if(olddata == NULL) {
+#ifdef DEBUG
+            syslog(LOG_NOTICE, "Old timestamp is 0, setting data...");
+#endif
             firstDetect = currentdata->timestamp;
-            olddata->timestamp = currentdata->timestamp;
-            olddata->y = currentdata->y;
+            olddata = currentdata;
             count = 0;
             continue;
         }
 
-            #ifdef DEBUG
-                syslog(LOG_NOTICE, "12345");
-                syslog(LOG_NOTICE, "TMSTMP: %u", currentdata);
-            #endif
-        
-        if(currentdata->timestamp == 0){
-            #ifdef DEBUG
-                syslog(LOG_NOTICE, "BIAAATCH");
-            #endif
-        }
-
-                    #ifdef DEBUG
-                syslog(LOG_NOTICE, "1234");
-            #endif
 
         if(currentdata->timestamp - olddata->timestamp > 1000) {
-            #ifdef DEBUG
-                syslog(LOG_NOTICE, "1");
-            #endif
+#ifdef DEBUG
+            syslog(LOG_NOTICE, "Data is more than 1 second old. Purging.");
+#endif
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
             count = 0;
