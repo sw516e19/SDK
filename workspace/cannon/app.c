@@ -184,6 +184,7 @@ void calculate_task(intptr_t unused) {
         if(olddata == NULL) {
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
+            sumfall = 0;
             count = 0;
             continue;
         }
@@ -191,6 +192,7 @@ void calculate_task(intptr_t unused) {
         if(currentdata->timestamp - olddata->timestamp > 1000) {
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
+            sumfall = 0;
             count = 0;
             continue;
         }
