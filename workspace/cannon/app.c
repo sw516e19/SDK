@@ -80,6 +80,9 @@ void detect_task(intptr_t unused) {
     uint8_t index = 0;
 
     pixycam_response.header.payload_length = 0;
+#ifdef WCRTA
+    SYSTIM startTime, endTime;
+#endif
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task finished init");
@@ -93,7 +96,10 @@ void detect_task(intptr_t unused) {
         // Sleep to let other tasks do some processing
         while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
             tslp_tsk(2);
-        
+#ifdef WCRTA
+        get_tim(&startTime);
+#endif        
+
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
         if(pixycam_response.header.payload_length == 0) 
@@ -102,16 +108,9 @@ void detect_task(intptr_t unused) {
         if(pixycam_response.blocks[0].signature != signatures)
             continue;
 
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Detected block!");
-#endif
-
         // Get the detection time
         get_tim(&detected_blocks[index].timestamp); // Time: 17
         detected_blocks[index].y = pixycam_response.blocks[0].y_center;
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Index: %d timestamp: %lu", index, detected_blocks[index].timestamp);
-#endif
 
         snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
         index++;
@@ -121,6 +120,10 @@ void detect_task(intptr_t unused) {
 
         pixycam_response.header.payload_length = 0;  
         pixycam_response.blocks[0].signature = -1;   
+#ifdef WCRTA
+        get_tim(&endTime);
+        syslog(LOG_NOTICE, "[WCRTA] dect: %lu", endTime - startTime);
+#endif
     }
 }
 
@@ -141,7 +144,7 @@ int32_t calculate_fallduration(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
-    return round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
+    return round((sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2)) - v_0) / GRAVITY_PIXELS);
 }
 
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
@@ -165,41 +168,35 @@ void calculate_task(intptr_t unused) {
 #endif
     intptr_t current_ptr;
     detected_pixycam_block_t *currentdata, *olddata = NULL;
+#ifdef WCRTA
+    SYSTIM startTime, endTime;
+#endif
 
     while (true) {
         //TODO: Add timeout.
         rcv_dtq(CAMDATAQUEUE, &current_ptr);
+#ifdef WCRTA
+        get_tim(&startTime);
+#endif
         
         currentdata = (detected_pixycam_block_t*)current_ptr;
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Begin calculate on new block!");
-        syslog(LOG_NOTICE, "timestamp: %u", currentdata->timestamp);
-#endif
 
         if(olddata == NULL) {
-#ifdef DEBUG
-            syslog(LOG_NOTICE, "Old timestamp is 0, setting data...");
-#endif
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
             count = 0;
             continue;
         }
-
-#ifdef DEBUG
-syslog(LOG_NOTICE, "oldtimestamp: %lu, newtimestamp: %lu", olddata->timestamp, currentdata->timestamp);
-#endif
 
         if(currentdata->timestamp - olddata->timestamp > 1000) {
-#ifdef DEBUG
-            syslog(LOG_NOTICE, "Data is more than 1 second old. Purging.");
-#endif
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
             count = 0;
             continue;
         }
-
+        if(olddata->y == currentdata->y) {
+            continue;
+        }
         current_time_to_shoot = calculate_fallduration(&olddata->y, &currentdata->y, &olddata->timestamp, &currentdata->timestamp);
         
         offsetFromFirstDetect = currentdata->timestamp - firstDetect + current_time_to_shoot;
@@ -207,20 +204,27 @@ syslog(LOG_NOTICE, "oldtimestamp: %lu, newtimestamp: %lu", olddata->timestamp, c
 
         sumfall = sumfall + offsetFromFirstDetect;
         avgfalltime = sumfall / count;
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "timestamp: %lu", currentdata->timestamp);
+        syslog(LOG_NOTICE, "y: %d", currentdata->y);
+        syslog(LOG_NOTICE, "ctts: %d", current_time_to_shoot);
+        syslog(LOG_NOTICE, "sumfall: %d", sumfall);
+        syslog(LOG_NOTICE, "avg: %d", avgfalltime);
+#endif
 
         calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
 
         //Write data to queue
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Calc shoot: %lu", calculated_deadlines[queue_index]);
-#endif
         snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
         queue_index++;
         if(queue_index > CALCDATAQUEUESIZE)
             queue_index = 0;
 
         olddata = currentdata;
-
+#ifdef WCRTA
+        get_tim(&endTime);
+        syslog(LOG_NOTICE, "[WCRTA] calc: %lu", endTime - startTime);
+#endif
 
         // 1. Wait for data to be available
 
@@ -250,10 +254,16 @@ void shoot_task(intptr_t unused) {
     ER ercd;
     // Initialize the motor
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
+#ifdef WCRTA
+    SYSTIM startTime, endTime;
+#endif
 
     while(true) {
         
         ercd = trcv_dtq(CALCDATAQUEUE, &pointer, 2);
+#ifdef WCRTA
+        get_tim(&startTime);
+#endif
         new_data = (SYSTIM *)pointer;
         if(ercd != E_TMOUT){
 #ifdef DEBUG
@@ -269,11 +279,12 @@ void shoot_task(intptr_t unused) {
         if (now < time_to_shoot) {
             continue;
         }
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Shooting");
-#endif
         ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
         time_to_shoot = 0;
+#ifdef WCRTA
+        get_tim(&endTime);
+        syslog(LOG_NOTICE, "[WCRTA] shoo: %lu", endTime - startTime);
+#endif
         
     }
 
