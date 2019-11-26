@@ -110,7 +110,7 @@ void detect_task(intptr_t unused) {
         get_tim(&detected_blocks[index].timestamp); // Time: 17
         detected_blocks[index].y = pixycam_response.blocks[0].y_center;
 #ifdef DEBUG
-        syslog(LOG_NOTICE, "Timestamp set: %lu", detected_blocks[index].timestamp);
+        syslog(LOG_NOTICE, "Index: %d timestamp: %lu", index, detected_blocks[index].timestamp);
 #endif
 
         snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
@@ -186,6 +186,9 @@ void calculate_task(intptr_t unused) {
             continue;
         }
 
+#ifdef DEBUG
+syslog(LOG_NOTICE, "oldtimestamp: %lu, newtimestamp: %lu", olddata->timestamp, currentdata->timestamp);
+#endif
 
         if(currentdata->timestamp - olddata->timestamp > 1000) {
 #ifdef DEBUG
@@ -208,17 +211,16 @@ void calculate_task(intptr_t unused) {
         calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
 
         //Write data to queue
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Calc shoot: %lu", calculated_deadlines[queue_index]);
+#endif
         snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
         queue_index++;
         if(queue_index > CALCDATAQUEUESIZE)
             queue_index = 0;
 
+        olddata = currentdata;
 
-
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Calc shoot: %lu", calculated_deadlines[queue_index]);
-        syslog(LOG_NOTICE, "Finished calculating on block!");
-#endif
 
         // 1. Wait for data to be available
 
@@ -254,6 +256,9 @@ void shoot_task(intptr_t unused) {
         ercd = trcv_dtq(CALCDATAQUEUE, &pointer, 2);
         new_data = (SYSTIM *)pointer;
         if(ercd != E_TMOUT){
+#ifdef DEBUG
+            syslog(LOG_NOTICE, "Setting new tts: %lu, Old time: %lu", *new_data, time_to_shoot);
+#endif
             time_to_shoot = *new_data;
         }
         get_tim(&now); 
@@ -264,7 +269,9 @@ void shoot_task(intptr_t unused) {
         if (now < time_to_shoot) {
             continue;
         }
-
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Shooting");
+#endif
         ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
         time_to_shoot = 0;
         
