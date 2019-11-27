@@ -37,7 +37,7 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 #define DEBUG
 
 // Enable WCRTA (Worst-case response time analysis)
-#define WCRTA
+#define WCRTA_NO
 
     // Global variable for trigger time in microseconds
     uint8_t trigger_time = 90 * 1000;
@@ -123,13 +123,12 @@ void detect_task(intptr_t unused) {
         if(pixycam_response.blocks[0].signature != signatures)
             continue;
 
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "[detect] =>DTQ");
+#endif
         // Get the detection time
         get_utm(&detected_blocks[index].timestamp); // Time: 17
         detected_blocks[index].y = pixycam_response.blocks[0].y_center;
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "B-Width: %d -> %d", pixycam_response.blocks[0].width, pixycam_response.blocks[0].width * 0.0035 * 100);
-        syslog(LOG_NOTICE, "B-Height: %d -> %d", pixycam_response.blocks[0].height, pixycam_response.blocks[0].height * 0.0035 * 100);
-#endif
 
         snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
         index++;
@@ -151,34 +150,29 @@ int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYS
     // Dereference the values. POTENTIALLY TURN TO PASS-BY-VALUE, LOOK THROUGH LATER
     uint16_t y_0 = *y0_location;
     uint16_t y_1 = *y1_location;
-    int32_t falltime = *y1_time - *y0_time;
+    //int32_t falltime = *y1_time - *y0_time;  //Original value.
+    int32_t falltime = 16231; //Hardcoded value. Measured. Is approximatly 1/61.58 seconds in µseconds.
+
+    #ifdef DEBUG
+    syslog(LOG_NOTICE, "Y0: %d Y1: %d", y_0, y_1);
+    #endif
 
     //double milis_dec = falltime / 1000; //is this actually necessary?
     
     // 1. Find average fall speed
-    double v_avg = (y_1 - y_0) / falltime;
-
-    #ifdef DEBUG
-    syslog(LOG_NOTICE, "avg: %f");
-    #endif
+    double v_avg = (double)(y_1 - y_0) / falltime;
 
     // 2. Find v_0 by subtracting the gained velocity in half the sample time.
     double v_0 = v_avg - GRAVITY_PIXELS * falltime * 0.5;
-#ifdef DEBUG
-    char str[11][30];
-    sprintf(str[10], "G: %.6e", GRAVITY_PIXELS);
-    syslog(LOG_NOTICE, str[10]);
-    syslog(LOG_NOTICE, "v_0: %f", v_0);
 
-    double number = 2.8042852e-4;
+#ifdef DEBUG
+    char str[10][30];
+    sprintf(str[0], "v_avg: %lf", v_avg);
+    sprintf(str[1], "v_0: %lf", v_0);
     for (uint8_t i = 0; i < 10; i++)
     {
-        sprintf(str[i], "G: %E", number);
         syslog(LOG_NOTICE, str[i]);
-        number = number / 10;
     }
-    
-    
 #endif
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
@@ -195,8 +189,8 @@ void calculate_task(intptr_t unused) {
 
     uint32_t current_time_to_shoot = 0;
     uint32_t sumfall = 0;
-    uint16_t avgfalltime = 0;
-    uint16_t offsetFromFirstDetect = 0;
+    uint32_t avgfalltime = 0;
+    uint32_t offsetFromFirstDetect = 0;
     uint16_t count;
     SYSUTM firstDetect;
     uint8_t queue_index = 0;
@@ -213,6 +207,9 @@ void calculate_task(intptr_t unused) {
 
     while (true) {
         //TODO: Add timeout.
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "[calc] DTQ=>");
+#endif
         rcv_dtq(CAMDATAQUEUE, &current_ptr);
 #ifdef WCRTA
         get_utm(&startTime);
@@ -253,6 +250,7 @@ void calculate_task(intptr_t unused) {
         avgfalltime = sumfall / count;
 #ifdef DEBUG
         syslog(LOG_NOTICE, "timestamp: %lu", currentdata->timestamp);
+        syslog(LOG_NOTICE, "firstDetect %lu", firstDetect);
         syslog(LOG_NOTICE, "y: %d", currentdata->y);
         syslog(LOG_NOTICE, "ctts: %d", current_time_to_shoot);
         syslog(LOG_NOTICE, "sumfall: %d", sumfall);
@@ -261,6 +259,9 @@ void calculate_task(intptr_t unused) {
 
         calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
 
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "[calc] =>DTQ2");
+#endif
         //Write data to queue
         snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
         queue_index++;
@@ -313,13 +314,22 @@ void shoot_task(intptr_t unused) {
         get_utm(&startTime);
 #endif
         new_data = (SYSUTM *)pointer;
+        get_utm(&now); 
         if(ercd != E_TMOUT){
 #ifdef DEBUG
+            SYSUTM cu;
+            get_utm(&cu);
             syslog(LOG_NOTICE, "Setting new tts: %lu, Old time: %lu", *new_data, time_to_shoot);
+            syslog(LOG_NOTICE, "Current TS: %lu", cu);
 #endif
+            if(time_to_shoot == 0) {
+                if(*new_data < time_to_shoot) {
+                    //Ignore data thats too old.
+                    continue;
+                }
+            }
             time_to_shoot = *new_data;
         }
-        get_utm(&now); 
 
         if(time_to_shoot == 0) {
             continue;
@@ -327,7 +337,7 @@ void shoot_task(intptr_t unused) {
         if (now < time_to_shoot) {
             continue;
         }
-        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
+        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, false);
         time_to_shoot = 0;
 #ifdef WCRTA
         get_utm(&endTime);
