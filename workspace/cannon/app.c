@@ -39,12 +39,34 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 // Enable WCRTA (Worst-case response time analysis)
 #define WCRTA_NO
 
-    // Global variable for trigger time in microseconds
-    uint8_t trigger_time = 90 * 1000;
+// Global variable for trigger time in microseconds
+uint32_t trigger_time = 90 * 1000;
+
+void printshoot_time()
+{
+    char str[30];
+    sprintf(str, "Trigger time: %lu", trigger_time);
+    ev3_lcd_draw_string(str, 0, EV3_LCD_HEIGHT / 2);
+#ifdef DEBUG
+    syslog(LOG_NOTICE, str);
+#endif
+}
 
 // Function to modify the trigger time
-void modify_trigger_time(uint8_t *change) {
-    trigger_time = trigger_time + *change;
+void modify_trigger_time(intptr_t datapointer)
+{
+    int16_t addtime = (int16_t)datapointer;
+    trigger_time = trigger_time + addtime;
+    printshoot_time();
+}
+
+void rotate_moter(intptr_t datapointer)
+{
+    int16_t rotate = (int8_t)datapointer;
+#ifdef DEBUG
+    syslog(LOG_NOTICE, " %d change", rotate);
+#endif
+    ev3_motor_rotate(EV3_PORT_A, rotate * GEARING, 100, true);
 }
 
 // The first task that is executed, which will perform initial setup that cannot be done in other tasks
@@ -55,11 +77,16 @@ void init_task(intptr_t unused) {
 #endif
 
     // Create EV3 button clicked events
-    uint8_t incr = 5;
-    uint8_t decr = -5;
+    int16_t incr = 5000;
+    int16_t decr = -5000;
     ev3_button_set_on_clicked(BRICK_BUTTON_DOWN, modify_trigger_time, decr);
     ev3_button_set_on_clicked(BRICK_BUTTON_UP, modify_trigger_time, incr);
-
+    int8_t motor_incr = 5;
+    int8_t motor_decr = -5;
+    ev3_button_set_on_clicked(BRICK_BUTTON_LEFT, rotate_moter, motor_decr);
+    ev3_button_set_on_clicked(BRICK_BUTTON_RIGHT, rotate_moter, motor_incr);
+    ev3_lcd_set_font(EV3_FONT_MEDIUM);
+    printshoot_time();
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Init task finished");
@@ -95,6 +122,7 @@ void detect_task(intptr_t unused) {
     uint8_t index = 0;
 
     pixycam_response.header.payload_length = 0;
+    intptr_t output_ptr;
 #ifdef WCRTA
     SYSUTM startTime, endTime;
 #endif
@@ -130,7 +158,9 @@ void detect_task(intptr_t unused) {
         get_utm(&detected_blocks[index].timestamp); // Time: 17
         detected_blocks[index].y = pixycam_response.blocks[0].y_center;
 
-        snd_dtq(CAMDATAQUEUE, &detected_blocks[index]);
+        output_ptr = (intptr_t) &detected_blocks[index];
+
+        snd_dtq(CAMDATAQUEUE, output_ptr);
         index++;
         if(index > CAMDATAQUEUESIZE) {
             index = 0;
@@ -165,16 +195,6 @@ int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYS
     // 2. Find v_0 by subtracting the gained velocity in half the sample time.
     double v_0 = v_avg - GRAVITY_PIXELS * falltime * 0.5;
 
-#ifdef DEBUG
-    char str[10][30];
-    sprintf(str[0], "v_avg: %lf", v_avg);
-    sprintf(str[1], "v_0: %lf", v_0);
-    for (uint8_t i = 0; i < 10; i++)
-    {
-        syslog(LOG_NOTICE, str[i]);
-    }
-#endif
-
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
     return round((sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2)) - v_0) / GRAVITY_PIXELS);
@@ -194,12 +214,11 @@ void calculate_task(intptr_t unused) {
     uint16_t count;
     SYSUTM firstDetect;
     uint8_t queue_index = 0;
-    ER ercd;
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Calculate task init finished");
 #endif
-    intptr_t current_ptr;
+    intptr_t current_ptr, output_ptr;
     detected_pixycam_block_t *currentdata, *olddata = NULL;
 #ifdef WCRTA
     SYSUTM startTime, endTime;
@@ -258,12 +277,16 @@ void calculate_task(intptr_t unused) {
 #endif
 
         calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
+        output_ptr = (intptr_t) &calculated_deadlines[queue_index];
 
 #ifdef DEBUG
         syslog(LOG_NOTICE, "[calc] =>DTQ2");
 #endif
         //Write data to queue
-        snd_dtq(CALCDATAQUEUE, &calculated_deadlines[queue_index]);
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Calc shoot: %lu", calculated_deadlines[queue_index]);
+#endif
+        snd_dtq(CALCDATAQUEUE, output_ptr);
         queue_index++;
         if(queue_index > CALCDATAQUEUESIZE)
             queue_index = 0;
@@ -323,7 +346,7 @@ void shoot_task(intptr_t unused) {
             syslog(LOG_NOTICE, "Current TS: %lu", cu);
 #endif
             if(time_to_shoot == 0) {
-                if(*new_data < time_to_shoot) {
+                if(*new_data < now) {
                     //Ignore data thats too old.
                     continue;
                 }
@@ -337,7 +360,12 @@ void shoot_task(intptr_t unused) {
         if (now < time_to_shoot) {
             continue;
         }
-        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, false);
+        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Shot!");
+        syslog(LOG_NOTICE, "now: %lu", now);
+        syslog(LOG_NOTICE, "tts: %lu", time_to_shoot);
+#endif
         time_to_shoot = 0;
 #ifdef WCRTA
         get_utm(&endTime);
