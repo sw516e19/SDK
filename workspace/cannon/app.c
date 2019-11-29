@@ -36,9 +36,6 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 // Enable debugging
 #define DEBUG
 
-// Enable WCRTA (Worst-case response time analysis)
-#define WCRTA_NO
-
 // Global variable for trigger time in microseconds
 uint32_t trigger_time = 90 * 1000;
 
@@ -123,9 +120,6 @@ void detect_task(intptr_t unused) {
 
     pixycam_response.header.payload_length = 0;
     intptr_t output_ptr;
-#ifdef WCRTA
-    SYSUTM startTime, endTime;
-#endif
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task finished init");
@@ -139,9 +133,6 @@ void detect_task(intptr_t unused) {
         // Sleep to let other tasks do some processing
         while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
             tslp_tsk(2);
-#ifdef WCRTA
-        get_utm(&startTime);
-#endif        
 
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
@@ -168,10 +159,6 @@ void detect_task(intptr_t unused) {
 
         pixycam_response.header.payload_length = 0;  
         pixycam_response.blocks[0].signature = -1;   
-#ifdef WCRTA
-        get_utm(&endTime);
-        syslog(LOG_NOTICE, "[WCRTA] dect: %lu", endTime - startTime);
-#endif
     }
 }
 
@@ -183,9 +170,9 @@ int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYS
     //int32_t falltime = *y1_time - *y0_time;  //Original value.
     int32_t falltime = 16231; //Hardcoded value. Measured. Is approximatly 1/61.58 seconds in µseconds.
 
-    #ifdef DEBUG
+#ifdef DEBUG
     syslog(LOG_NOTICE, "Y0: %d Y1: %d", y_0, y_1);
-    #endif
+#endif
 
     //double milis_dec = falltime / 1000; //is this actually necessary?
     
@@ -220,9 +207,6 @@ void calculate_task(intptr_t unused) {
 #endif
     intptr_t current_ptr, output_ptr;
     detected_pixycam_block_t *currentdata, *olddata = NULL;
-#ifdef WCRTA
-    SYSUTM startTime, endTime;
-#endif
 
     while (true) {
         //TODO: Add timeout.
@@ -230,9 +214,6 @@ void calculate_task(intptr_t unused) {
         syslog(LOG_NOTICE, "[calc] DTQ=>");
 #endif
         rcv_dtq(CAMDATAQUEUE, &current_ptr);
-#ifdef WCRTA
-        get_utm(&startTime);
-#endif
         
         currentdata = (detected_pixycam_block_t*)current_ptr;
 
@@ -292,10 +273,6 @@ void calculate_task(intptr_t unused) {
             queue_index = 0;
 
         olddata = currentdata;
-#ifdef WCRTA
-        get_utm(&endTime);
-        syslog(LOG_NOTICE, "[WCRTA] calc: %lu", endTime - startTime);
-#endif
 
         // 1. Wait for data to be available
 
@@ -333,9 +310,6 @@ void shoot_task(intptr_t unused) {
     while(true) {
         
         ercd = trcv_dtq(CALCDATAQUEUE, &pointer, 2);
-#ifdef WCRTA
-        get_utm(&startTime);
-#endif
         new_data = (SYSUTM *)pointer;
         get_utm(&now); 
         if(ercd != E_TMOUT){
@@ -367,10 +341,6 @@ void shoot_task(intptr_t unused) {
         syslog(LOG_NOTICE, "tts: %lu", time_to_shoot);
 #endif
         time_to_shoot = 0;
-#ifdef WCRTA
-        get_utm(&endTime);
-        syslog(LOG_NOTICE, "[WCRTA] shoo: %lu", endTime - startTime);
-#endif
         
     }
 
