@@ -147,13 +147,6 @@ int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYS
     //int32_t falltime = *y1_time - *y0_time;  //Original value.
     int32_t falltime = 16231; //Hardcoded value. Measured. Is approximatly 1/61.58 seconds in µseconds.
 
-<<<<<<< HEAD
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Y0: %d Y1: %d", y_0, y_1);
-#endif
-
-=======
->>>>>>> wcrta
     //double milis_dec = falltime / 1000; //is this actually necessary?
     
     // 1. Find average fall speed
