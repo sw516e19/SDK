@@ -63,6 +63,8 @@ extern "C" {
 #define HIGH_PRIORITY	9		/* 並行実行されるタスクの優先度 */
 #define MID_PRIORITY	10
 #define LOW_PRIORITY	11
+#define CAMDATAQUEUESIZE 3
+#define CALCDATAQUEUESIZE 2
 
 /*
  *  ターゲットに依存する可能性のある定数の定義
@@ -81,6 +83,7 @@ extern "C" {
  */
 #ifndef TOPPERS_MACRO_ONLY
 
+extern void init_task(intptr_t exinf);
 extern void detect_task(intptr_t exinf);
 extern void calculate_task(intptr_t exinf);
 extern void shoot_task(intptr_t exinf);

@@ -11,47 +11,98 @@
 
 #include <math.h>
 
-#define GRAVITY_PIXELS 0.002804285714285714 // Measured in pixels/ms
-#define PIXYCAM_BLOCK_THRESHOLD 5 // The maximum amount of pixycam blocks we can detect
-#define POINT_OF_IMPACT 281 // the calculated point of impact at a distance of a meter
+/**
+ * Fall length = tan(20) * 1 meter * 2 (2 pices) 
+ * Resolution = Fall length / 208 pixel = 0.0035 meter/pixel
+ * Gravityacceleration: 9.815 m/s^2 / 0.0035 m/pixel = 2804 pixel/s^2
+ * Recalc to milliseconds = 2804 p/s^2 * 1/1000 s/ms * 1/1000 s/ms = 0.00280428571428571428571428571429 pixel/ms^2
+ * Recalc to microseconds = 2804 p/s^2 * 1/1000000 s/µs * 1/1000000 s/µs = 2.8042857142857142857142857142857E-9
+ */
+const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. Fomular: (tan(20) * 1 * 2) / 208 = 0.0035 m/pixel. 9.815 m/s^2 / 0.0035 m/pixel = 2804 pixel/second
+#define PIXYCAM_RESPONSE_THRESHOLD 5 // The maximum amount of responses that we want to retrieve
+#define PIXYCAM_BLOCK_THRESHOLD 1 // The maximum amount of pixycam blocks we want to retrieve in the response
+/**
+ * Resolution = 0.0035 m/pixel
+ * Distance from camera to shooter = 0.66 m
+ * Drop in flight = 0.09 m
+ * Falltotal = (0.66 m + 0.09 m) / 0.0035 m/pixel = 214 pixel
+ * Offset = 208 / 2 = 104 pixel
+ * Total = 214 pixel + 104 pixel = 318 pixel 
+ */
+#define POINT_OF_IMPACT 318 // the calculated point of impact at a distance of a meter
 #define GEARING 5
-#define MOTOR_ROTATION_MILLIS 500
-#define PROJECTILE_TRAVEL_TIME 135
+#define PROJECTILE_TRAVEL_TIME 135 * 1000 //Microseconds
 
 // Enable debugging
 #define DEBUG
 
-// A 2d vector with an x coordinate, y coordinate, and v for velocity
-typedef struct {
-    double x;
-    int y;
-    double v;
-} vec_t;
+// Enable WCRTA (Worst-case response time analysis)
+#define WCRTA_NO
+
+// Global variable for trigger time in microseconds
+uint32_t trigger_time = 90 * 1000;
+
+void printshoot_time()
+{
+    char str[30];
+    sprintf(str, "Trigger time: %lu", trigger_time);
+    ev3_lcd_draw_string(str, 0, EV3_LCD_HEIGHT / 2);
+#ifdef DEBUG
+    syslog(LOG_NOTICE, str);
+#endif
+}
+
+// Function to modify the trigger time
+void modify_trigger_time(intptr_t datapointer)
+{
+    int16_t addtime = (int16_t)datapointer;
+    trigger_time = trigger_time + addtime;
+    printshoot_time();
+}
+
+void rotate_moter(intptr_t datapointer)
+{
+    int16_t rotate = (int8_t)datapointer;
+#ifdef DEBUG
+    syslog(LOG_NOTICE, " %d change", rotate);
+#endif
+    ev3_motor_rotate(EV3_PORT_A, rotate * GEARING, 100, true);
+}
+
+// The first task that is executed, which will perform initial setup that cannot be done in other tasks
+void init_task(intptr_t unused) {
+
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Started init task");
+#endif
+
+    // Create EV3 button clicked events
+    int16_t incr = 5000;
+    int16_t decr = -5000;
+    ev3_button_set_on_clicked(BRICK_BUTTON_DOWN, modify_trigger_time, decr);
+    ev3_button_set_on_clicked(BRICK_BUTTON_UP, modify_trigger_time, incr);
+    int8_t motor_incr = 5;
+    int8_t motor_decr = -5;
+    ev3_button_set_on_clicked(BRICK_BUTTON_LEFT, rotate_moter, motor_decr);
+    ev3_button_set_on_clicked(BRICK_BUTTON_RIGHT, rotate_moter, motor_incr);
+    ev3_lcd_set_font(EV3_FONT_MEDIUM);
+    printshoot_time();
+
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Init task finished");
+#endif
+
+}
 
 // The struct of the detected pixycam block response. Contains the detection time and current block index to be parsed by calculate_task.
 typedef struct {
-    pixycam2_block_response_t pixycam_block_response[PIXYCAM_BLOCK_THRESHOLD];
-    SYSTIM detection_time;
-    uint8_t current_block_index;
+    uint16_t y;
+    SYSUTM timestamp;
 } detected_pixycam_block_t;
 
-// A pixycam block array of size threshold, that is able to hold threshold anount of blocks.
-pixycam2_block_t pixycamBlockArray[PIXYCAM_BLOCK_THRESHOLD][PIXYCAM_BLOCK_THRESHOLD];
-
-int8_t direction = 1;
-
-void write_string(const char *arr, bool_t top) {
-    ev3_lcd_set_font(EV3_FONT_MEDIUM);
-
-    int y = top ? 0 : EV3_LCD_HEIGHT / 2;
-    ev3_lcd_draw_string(arr, 0, y);
-}
-
 // Global variable for the block that was detected
-detected_pixycam_block_t detected_block;
-
-// Global variable for the detect_task block index. This value is set by detect_task and shoot_task
-uint8_t detect_task_block_index = 0;
+detected_pixycam_block_t detected_blocks[CAMDATAQUEUESIZE + 1];
+SYSUTM calculated_deadlines[CALCDATAQUEUESIZE + 1];
 
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
@@ -59,18 +110,22 @@ void detect_task(intptr_t unused) {
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task init");
 #endif
-
     // Initialize the pixycam
     ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
 
-    // Initialize detected_block's values
-    detected_block.detection_time = 0;
-
-    detected_block.pixycam_block_response[0].blocks = pixycamBlockArray[0];
-
     // Declare and assign signature and num_blocks variables
     block_signature_t signatures = SIGNATURE_1;
-    uint8_t num_blocks = 1;
+
+    pixycam2_block_t pixycam_block[PIXYCAM_BLOCK_THRESHOLD];
+    pixycam2_block_response_t pixycam_response;
+    pixycam_response.blocks = pixycam_block;
+    uint8_t index = 0;
+
+    pixycam_response.header.payload_length = 0;
+    intptr_t output_ptr;
+#ifdef WCRTA
+    SYSUTM startTime, endTime;
+#endif
 
 #ifdef DEBUG
     syslog(LOG_NOTICE, "Detect task finished init");
@@ -78,95 +133,72 @@ void detect_task(intptr_t unused) {
 
     // Begin detect_task loop
     while (true) {
-
-        // If the threshold has been reached, do not allow getting blocks from the pixycam
-        // Since arrays are 0-based, an array of size 5 would trigger an exception if the current index is 5
-        if (detect_task_block_index == PIXYCAM_BLOCK_THRESHOLD) { // Time: 0
-            tslp_tsk(5);
-            continue;
-        }
-
         // Call get blocks
-        pixycam_2_get_blocks(EV3_PORT_1, &detected_block.pixycam_block_response[detect_task_block_index], signatures, num_blocks); // Time: 0
+        pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
         
         // Sleep to let other tasks do some processing
-        tslp_tsk(17); // Time: 17
-        
+        while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
+            tslp_tsk(2);
+#ifdef WCRTA
+        get_utm(&startTime);
+#endif        
+
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
-                    #ifdef DEBUG
-    syslog(LOG_NOTICE, "Test 1");
-#endif
-
-        char debug[50];
-        sprintf(debug, "TEST SIZE: %d", sizeof(detected_block.pixycam_block_response[detect_task_block_index].blocks));
-
-                            #ifdef DEBUG
-    syslog(LOG_NOTICE, debug);
-#endif
-
-        if(detected_block.pixycam_block_response[detect_task_block_index].header.payload_length == 0)
+        if(pixycam_response.header.payload_length == 0) 
             continue; // Time: 17
 
-                    #ifdef DEBUG
-    syslog(LOG_NOTICE, "Test 2");
-#endif
-        break;
+        if(pixycam_response.blocks[0].signature != signatures)
+            continue;
 
 #ifdef DEBUG
-        syslog(LOG_NOTICE, "Detected block!");
+        syslog(LOG_NOTICE, "[detect] =>DTQ");
 #endif
-
-        break;
-
         // Get the detection time
-        get_tim(&detected_block.detection_time); // Time: 17
+        get_utm(&detected_blocks[index].timestamp); // Time: 17
+        detected_blocks[index].y = pixycam_response.blocks[0].y_center;
 
-        // In order for the calculate_task to grab the index of the current block, set it in the data structure
-        // This is necessary as detect_task_block_index will be incremented, and therefore reference the next block
-        detected_block.current_block_index = detect_task_block_index;
+        output_ptr = (intptr_t) &detected_blocks[index];
 
-        // Increment the detect_task_block_index for detect_task to know where the next block should be read to
-        ++detect_task_block_index; // Time: 17
+        snd_dtq(CAMDATAQUEUE, output_ptr);
+        index++;
+        if(index > CAMDATAQUEUESIZE) {
+            index = 0;
+        }
 
-        detected_block.pixycam_block_response[detect_task_block_index].blocks = pixycamBlockArray[detect_task_block_index];
+        pixycam_response.header.payload_length = 0;  
+        pixycam_response.blocks[0].signature = -1;   
+#ifdef WCRTA
+        get_utm(&endTime);
+        syslog(LOG_NOTICE, "[WCRTA] dect: %lu", endTime - startTime);
+#endif
     }
 }
 
-SYSTIM get_time_until_impact(uint16_t *y_0_ptr, uint16_t *y_1_ptr, SYSTIM *y0_millis_ptr, SYSTIM *y1_millis_ptr) {
+int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYSUTM *y0_time, SYSUTM *y1_time) {
 
     // Dereference the values. POTENTIALLY TURN TO PASS-BY-VALUE, LOOK THROUGH LATER
-    uint16_t y_0 = *y_0_ptr;
-    uint16_t y_1 = *y_1_ptr;
-    int millis = *y1_millis_ptr - *y0_millis_ptr;
+    uint16_t y_0 = *y0_location;
+    uint16_t y_1 = *y1_location;
+    //int32_t falltime = *y1_time - *y0_time;  //Original value.
+    int32_t falltime = 16231; //Hardcoded value. Measured. Is approximatly 1/61.58 seconds in µseconds.
 
-    //double milis_dec = millis / 1000; //is this actually necessary?
+    #ifdef DEBUG
+    syslog(LOG_NOTICE, "Y0: %d Y1: %d", y_0, y_1);
+    #endif
+
+    //double milis_dec = falltime / 1000; //is this actually necessary?
     
     // 1. Find average fall speed
-    double v_avg = (y_1 - y_0) / millis;
+    double v_avg = (double)(y_1 - y_0) / falltime;
 
-    // 2. Find v_0 by subtracting half the acceleration from the free fall equation, e.g. 0.5 * GRAVITY_PIXELS * pow(t / 2, 2)
-    double v_0 = v_avg - GRAVITY_PIXELS * millis;
+    // 2. Find v_0 by subtracting the gained velocity in half the sample time.
+    double v_0 = v_avg - GRAVITY_PIXELS * falltime * 0.5;
 
     // 3. Calculate the milliseconds needed to fall to the point of impact (POI) use rewrite of:
     // x = x_0 + v_0 * t + 0.5 * g * t² => t = (sqrt(2 a (y - x) + v^2) - v)/a and a!=0
-    int delta_t = round(sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2) - v_0) / GRAVITY_PIXELS);
-    SYSTIM fall_time = *y0_millis_ptr + delta_t - PROJECTILE_TRAVEL_TIME;
-
-    return fall_time;
+    return round((sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2)) - v_0) / GRAVITY_PIXELS);
 }
-
-ulong_t new_blocks_available(SYSTIM *old_stamp) {
-
-    ulong_t result = detected_block.detection_time - *old_stamp;
-
-    old_stamp = detected_block.detection_time;
-
-    return result;
-
-}
-
-SYSTIM time_to_shoot = 0;
 
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
 void calculate_task(intptr_t unused) {
@@ -175,52 +207,94 @@ void calculate_task(intptr_t unused) {
     syslog(LOG_NOTICE, "Calculate task init");
 #endif
 
-    SYSTIM old = 0;
+    uint32_t current_time_to_shoot = 0;
+    uint32_t sumfall = 0;
+    uint32_t avgfalltime = 0;
+    uint32_t offsetFromFirstDetect = 0;
+    uint16_t count;
+    SYSUTM firstDetect;
+    uint8_t queue_index = 0;
 
-    SYSTIM current_time_to_shoot = 0;
-    uint16_t y_0 = -1, y_1 = -1;
+#ifdef DEBUG
+    syslog(LOG_NOTICE, "Calculate task init finished");
+#endif
+    intptr_t current_ptr, output_ptr;
+    detected_pixycam_block_t *currentdata, *olddata = NULL;
+#ifdef WCRTA
+    SYSUTM startTime, endTime;
+#endif
 
     while (true) {
+        //TODO: Add timeout.
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "[calc] DTQ=>");
+#endif
+        rcv_dtq(CAMDATAQUEUE, &current_ptr);
+#ifdef WCRTA
+        get_utm(&startTime);
+#endif
+        
+        currentdata = (detected_pixycam_block_t*)current_ptr;
 
-        // if no new block is available, simply sleep
-        if (!(new_blocks_available(&old))) {
-            tslp_tsk(5);
+        if(olddata == NULL) {
+#ifdef DEBUG
+            syslog(LOG_NOTICE, "RESET CALC: first shot");
+#endif
+            firstDetect = currentdata->timestamp;
+            olddata = currentdata;
+            sumfall = 0;
+            count = 0;
             continue;
         }
 
+        if(currentdata->timestamp - olddata->timestamp > 1 * 1000 * 1000) {
 #ifdef DEBUG
-        syslog(LOG_NOTICE, "Begin calculate on new block!");
+            syslog(LOG_NOTICE, "RESET CALC: > 1 second old");
 #endif
-       
-        if(y_0 < 0){
-           y_0 = detected_block.pixycam_block_response[detected_block.current_block_index].blocks->y_center;
-           continue;
+            firstDetect = currentdata->timestamp;
+            olddata = currentdata;
+            sumfall = 0;
+            count = 0;
+            continue;
         }
-
-        // 1. check if y_1 is set, if not, set it
-        // 2. if y_1 is set, do y_0 = y_1 and then set y_1
-        // 3. calculate
-        bool_t y_1_is_set = y_1 >= 0;
+        if(olddata->y == currentdata->y) {
+            continue;
+        }
+        current_time_to_shoot = calculate_fallduration(&olddata->y, &currentdata->y, &olddata->timestamp, &currentdata->timestamp);
         
-        if(y_1_is_set) {
-            y_0 = y_1;
-        }
-        y_1 = detected_block.pixycam_block_response[detected_block.current_block_index].blocks->y_center;
+        offsetFromFirstDetect = currentdata->timestamp - firstDetect + current_time_to_shoot;
+        count++;
 
+        sumfall = sumfall + offsetFromFirstDetect;
+        avgfalltime = sumfall / count;
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "timestamp: %lu", currentdata->timestamp);
+        syslog(LOG_NOTICE, "firstDetect %lu", firstDetect);
+        syslog(LOG_NOTICE, "y: %d", currentdata->y);
+        syslog(LOG_NOTICE, "ctts: %d", current_time_to_shoot);
+        syslog(LOG_NOTICE, "sumfall: %d", sumfall);
+        syslog(LOG_NOTICE, "avg: %d", avgfalltime);
+#endif
 
-        // weight by picture, so the first picture is the least weighted
-        current_time_to_shoot = get_time_until_impact(&y_0, &y_1, &old, &detected_block.detection_time);
-
-        if(detected_block.current_block_index > 0) {
-            time_to_shoot = (time_to_shoot + current_time_to_shoot) / 2;
-        } else {
-            time_to_shoot = current_time_to_shoot;
-        }
-        
-
+        calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
+        output_ptr = (intptr_t) &calculated_deadlines[queue_index];
 
 #ifdef DEBUG
-        syslog(LOG_NOTICE, "Finished calculating on block!");
+        syslog(LOG_NOTICE, "[calc] =>DTQ2");
+#endif
+        //Write data to queue
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Calc shoot: %lu", calculated_deadlines[queue_index]);
+#endif
+        snd_dtq(CALCDATAQUEUE, output_ptr);
+        queue_index++;
+        if(queue_index > CALCDATAQUEUESIZE)
+            queue_index = 0;
+
+        olddata = currentdata;
+#ifdef WCRTA
+        get_utm(&endTime);
+        syslog(LOG_NOTICE, "[WCRTA] calc: %lu", endTime - startTime);
 #endif
 
         // 1. Wait for data to be available
@@ -244,54 +318,60 @@ void shoot_task(intptr_t unused) {
     syslog(LOG_NOTICE, "Shoot task init");
 #endif
 
-    bool_t motor_running = false;
-    SYSTIM now;
-    bool_t await_trigger_time = false;
-    bool_t await_trigger_preparation = false;
-
+    SYSUTM now;
+    SYSUTM *new_data;
+    
+    intptr_t pointer;
+    SYSUTM time_to_shoot = 0;
+    ER ercd;
     // Initialize the motor
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
+#ifdef WCRTA
+    SYSUTM startTime, endTime;
+#endif
 
     while(true) {
+        
+        ercd = trcv_dtq(CALCDATAQUEUE, &pointer, 2);
+#ifdef WCRTA
+        get_utm(&startTime);
+#endif
+        new_data = (SYSUTM *)pointer;
+        get_utm(&now); 
+        if(ercd != E_TMOUT){
+#ifdef DEBUG
+            SYSUTM cu;
+            get_utm(&cu);
+            syslog(LOG_NOTICE, "Setting new tts: %lu, Old time: %lu", *new_data, time_to_shoot);
+            syslog(LOG_NOTICE, "Current TS: %lu", cu);
+#endif
+            if(time_to_shoot == 0) {
+                if(*new_data < now) {
+                    //Ignore data thats too old.
+                    continue;
+                }
+            }
+            time_to_shoot = *new_data;
+        }
 
-        /*while( !motor_running && time_to_shoot == 0 )
-        tslp_tsk(1);*/
-        get_tim(&now);
-
-        await_trigger_time = now < time_to_shoot;
-        await_trigger_preparation = motor_running || time_to_shoot == 0;
-
-
-        if(await_trigger_preparation || await_trigger_time) {
-            tslp_tsk(1);
+        if(time_to_shoot == 0) {
             continue;
         }
-
-        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, false);
-        motor_running = true;
-
-
-        while(ev3_motor_get_counts(EV3_PORT_A) != ((360 * GEARING) - 5)){
-            tslp_tsk(20);
-
-            ev3_motor_reset_counts(EV3_PORT_A);
-            motor_running = false;
+        if (now < time_to_shoot) {
+            continue;
         }
+        ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
+#ifdef DEBUG
+        syslog(LOG_NOTICE, "Shot!");
+        syslog(LOG_NOTICE, "now: %lu", now);
+        syslog(LOG_NOTICE, "tts: %lu", time_to_shoot);
+#endif
+        time_to_shoot = 0;
+#ifdef WCRTA
+        get_utm(&endTime);
+        syslog(LOG_NOTICE, "[WCRTA] shoo: %lu", endTime - startTime);
+#endif
         
     }
 
-     
-    //shoot, reload, set time_to_shoot to 0
-
-    // Use the motor to fire the projectile
-    
-    // 0. Wait for available time to shoot through the global variable
-    
-    // 1. shoot when time is reached 
-
-    // 2. (then lower shoot tasks priority?)
-
-    // At the end of shoot task, reset detect task's block index to 0
-    detect_task_block_index = 0;
-    detected_block.pixycam_block_response[detect_task_block_index].blocks = pixycamBlockArray[detect_task_block_index];
 }
