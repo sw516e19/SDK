@@ -33,9 +33,6 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 #define GEARING 5
 #define PROJECTILE_TRAVEL_TIME 135 * 1000 //Microseconds
 
-// Enable debugging
-#define DEBUG
-
 // Enable WCRTA (Worst-case response time analysis)
 #define WCRTA_NO
 
@@ -47,9 +44,7 @@ void printshoot_time()
     char str[30];
     sprintf(str, "Trigger time: %lu", trigger_time);
     ev3_lcd_draw_string(str, 0, EV3_LCD_HEIGHT / 2);
-#ifdef DEBUG
     syslog(LOG_NOTICE, str);
-#endif
 }
 
 // Function to modify the trigger time
@@ -63,18 +58,12 @@ void modify_trigger_time(intptr_t datapointer)
 void rotate_moter(intptr_t datapointer)
 {
     int16_t rotate = (int8_t)datapointer;
-#ifdef DEBUG
     syslog(LOG_NOTICE, " %d change", rotate);
-#endif
     ev3_motor_rotate(EV3_PORT_A, rotate * GEARING, 100, true);
 }
 
 // The first task that is executed, which will perform initial setup that cannot be done in other tasks
 void init_task(intptr_t unused) {
-
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Started init task");
-#endif
 
     // Create EV3 button clicked events
     int16_t incr = 5000;
@@ -87,10 +76,6 @@ void init_task(intptr_t unused) {
     ev3_button_set_on_clicked(BRICK_BUTTON_RIGHT, rotate_moter, motor_incr);
     ev3_lcd_set_font(EV3_FONT_MEDIUM);
     printshoot_time();
-
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Init task finished");
-#endif
 
 }
 
@@ -107,9 +92,6 @@ SYSUTM calculated_deadlines[CALCDATAQUEUESIZE + 1];
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
 void detect_task(intptr_t unused) {
 
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Detect task init");
-#endif
     // Initialize the pixycam
     ev3_sensor_config(EV3_PORT_1, PIXYCAM_2);
 
@@ -127,9 +109,6 @@ void detect_task(intptr_t unused) {
     SYSUTM startTime, endTime;
 #endif
 
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Detect task finished init");
-#endif
 
     // Begin detect_task loop
     while (true) {
@@ -151,9 +130,6 @@ void detect_task(intptr_t unused) {
         if(pixycam_response.blocks[0].signature != signatures)
             continue;
 
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "[detect] =>DTQ");
-#endif
         // Get the detection time
         get_utm(&detected_blocks[index].timestamp); // Time: 17
         detected_blocks[index].y = pixycam_response.blocks[0].y_center;
@@ -183,10 +159,6 @@ int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYS
     //int32_t falltime = *y1_time - *y0_time;  //Original value.
     int32_t falltime = 16231; //Hardcoded value. Measured. Is approximatly 1/61.58 seconds in µseconds.
 
-    #ifdef DEBUG
-    syslog(LOG_NOTICE, "Y0: %d Y1: %d", y_0, y_1);
-    #endif
-
     //double milis_dec = falltime / 1000; //is this actually necessary?
     
     // 1. Find average fall speed
@@ -203,10 +175,6 @@ int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYS
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
 void calculate_task(intptr_t unused) {
 
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Calculate task init");
-#endif
-
     uint32_t current_time_to_shoot = 0;
     uint32_t sumfall = 0;
     uint32_t avgfalltime = 0;
@@ -215,9 +183,6 @@ void calculate_task(intptr_t unused) {
     SYSUTM firstDetect;
     uint8_t queue_index = 0;
 
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Calculate task init finished");
-#endif
     intptr_t current_ptr, output_ptr;
     detected_pixycam_block_t *currentdata, *olddata = NULL;
 #ifdef WCRTA
@@ -226,9 +191,6 @@ void calculate_task(intptr_t unused) {
 
     while (true) {
         //TODO: Add timeout.
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "[calc] DTQ=>");
-#endif
         rcv_dtq(CAMDATAQUEUE, &current_ptr);
 #ifdef WCRTA
         get_utm(&startTime);
@@ -237,9 +199,6 @@ void calculate_task(intptr_t unused) {
         currentdata = (detected_pixycam_block_t*)current_ptr;
 
         if(olddata == NULL) {
-#ifdef DEBUG
-            syslog(LOG_NOTICE, "RESET CALC: first shot");
-#endif
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
             sumfall = 0;
@@ -248,9 +207,6 @@ void calculate_task(intptr_t unused) {
         }
 
         if(currentdata->timestamp - olddata->timestamp > 1 * 1000 * 1000) {
-#ifdef DEBUG
-            syslog(LOG_NOTICE, "RESET CALC: > 1 second old");
-#endif
             firstDetect = currentdata->timestamp;
             olddata = currentdata;
             sumfall = 0;
@@ -267,25 +223,11 @@ void calculate_task(intptr_t unused) {
 
         sumfall = sumfall + offsetFromFirstDetect;
         avgfalltime = sumfall / count;
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "timestamp: %lu", currentdata->timestamp);
-        syslog(LOG_NOTICE, "firstDetect %lu", firstDetect);
-        syslog(LOG_NOTICE, "y: %d", currentdata->y);
-        syslog(LOG_NOTICE, "ctts: %d", current_time_to_shoot);
-        syslog(LOG_NOTICE, "sumfall: %d", sumfall);
-        syslog(LOG_NOTICE, "avg: %d", avgfalltime);
-#endif
 
         calculated_deadlines[queue_index] = firstDetect + avgfalltime - trigger_time - PROJECTILE_TRAVEL_TIME;
         output_ptr = (intptr_t) &calculated_deadlines[queue_index];
 
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "[calc] =>DTQ2");
-#endif
         //Write data to queue
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Calc shoot: %lu", calculated_deadlines[queue_index]);
-#endif
         snd_dtq(CALCDATAQUEUE, output_ptr);
         queue_index++;
         if(queue_index > CALCDATAQUEUESIZE)
@@ -314,9 +256,6 @@ void calculate_task(intptr_t unused) {
 // Fire the cannon, and (hopefully) hit the target
 void shoot_task(intptr_t unused) {
 
-#ifdef DEBUG
-    syslog(LOG_NOTICE, "Shoot task init");
-#endif
 
     SYSUTM now;
     SYSUTM *new_data;
@@ -339,12 +278,6 @@ void shoot_task(intptr_t unused) {
         new_data = (SYSUTM *)pointer;
         get_utm(&now); 
         if(ercd != E_TMOUT){
-#ifdef DEBUG
-            SYSUTM cu;
-            get_utm(&cu);
-            syslog(LOG_NOTICE, "Setting new tts: %lu, Old time: %lu", *new_data, time_to_shoot);
-            syslog(LOG_NOTICE, "Current TS: %lu", cu);
-#endif
             if(time_to_shoot == 0) {
                 if(*new_data < now) {
                     //Ignore data thats too old.
@@ -361,11 +294,6 @@ void shoot_task(intptr_t unused) {
             continue;
         }
         ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
-#ifdef DEBUG
-        syslog(LOG_NOTICE, "Shot!");
-        syslog(LOG_NOTICE, "now: %lu", now);
-        syslog(LOG_NOTICE, "tts: %lu", time_to_shoot);
-#endif
         time_to_shoot = 0;
 #ifdef WCRTA
         get_utm(&endTime);
@@ -375,3 +303,4 @@ void shoot_task(intptr_t unused) {
     }
 
 }
+
