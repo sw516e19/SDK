@@ -34,7 +34,7 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 #define PROJECTILE_TRAVEL_TIME 135 * 1000 //Microseconds
 
 // Enable WCRTA (Worst-case response time analysis)
-#define WCRTA_NO
+#define WCRTA
 
 // Global variable for trigger time in microseconds
 uint32_t trigger_time = 90 * 1000;
@@ -107,14 +107,22 @@ void detect_task(intptr_t unused) {
     intptr_t output_ptr;
 #ifdef WCRTA
     SYSUTM startTime, endTime;
+    SYSUTM startTime2, endTime2;
+    long_t totalDuration;
 #endif
 
 
     // Begin detect_task loop
     while (true) {
+#ifdef WCRTA
+        get_utm(&startTime2);
+#endif
         // Call get blocks
         pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
         
+#ifdef WCRTA
+        get_utm(&endTime2);
+#endif
         // Sleep to let other tasks do some processing
         while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
             tslp_tsk(2);
@@ -146,7 +154,9 @@ void detect_task(intptr_t unused) {
         pixycam_response.blocks[0].signature = -1;   
 #ifdef WCRTA
         get_utm(&endTime);
-        syslog(LOG_NOTICE, "[WCRTA] dect: %lu", endTime - startTime);
+        totalDuration = (long_t)(endTime - startTime);
+        totalDuration = totalDuration + (long_t)(endTime2 - startTime2);
+        syslog(LOG_NOTICE, "[WCRTA] dect: %lu", totalDuration);
 #endif
     }
 }
