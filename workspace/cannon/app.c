@@ -133,7 +133,7 @@ void detect_task(intptr_t unused) {
 
         // Sleep to let other tasks do some processing
         while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
-            tslp_tsk(1);
+            tslp_tsk(2);
 
         get_utm(&startTime);
 
