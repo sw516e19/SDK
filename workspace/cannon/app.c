@@ -282,14 +282,14 @@ void calculate_task(intptr_t unused) {
             }
         }
 
+#ifdef WCRTA
+        syslog(LOG_NOTICE, "[WCRTA] Calculate: %lu", compTime);
+#endif
+
         // Increase the count of pictures
         ++calculate_task_picture_count;
 
         tslp_tsk((CALCULATE_TASK_PERIOD-compTime)/1000);
-
-#ifdef WCRTA
-        syslog(LOG_NOTICE, "[WCRTA] Calculate: %lu", compTime);
-#endif
     }
 }
 
@@ -347,6 +347,7 @@ void shoot_task(intptr_t unused) {
             ext_tsk();
         }
 
+        // Reset the picture counts to reset the periodic task handling
         detect_task_picture_count = 0;
         calculate_task_picture_count = 0;
 
