@@ -44,7 +44,6 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 // The minimum amount of pictures to get before detect and calculate task are reduced from a periodic task to a soft periodic task
 #define MINIMUM_PICTURE_COUNT 2
 
-
 // Global variable for trigger time in microseconds
 uint32_t trigger_time = 90 * 1000;
 
@@ -117,7 +116,7 @@ void detect_task(intptr_t unused) {
 
     pixycam_response.header.payload_length = 0;
     intptr_t output_ptr;
-    
+
     SYSUTM startTime, endTime;
     SYSUTM startTime2, endTime2;
     long_t compTime;
@@ -136,7 +135,7 @@ void detect_task(intptr_t unused) {
         while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
             tslp_tsk(1);
 
-        get_utm(&startTime);      
+        get_utm(&startTime);
 
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
@@ -159,7 +158,7 @@ void detect_task(intptr_t unused) {
         }
 
         pixycam_response.header.payload_length = 0;  
-        pixycam_response.blocks[0].signature = -1;   
+        pixycam_response.blocks[0].signature = -1;
 
         get_utm(&endTime);
         compTime = (long_t)(endTime - startTime);
@@ -223,7 +222,6 @@ void calculate_task(intptr_t unused) {
 
     SYSUTM startTime, endTime;
     long_t compTime;
-
 
     while (true) {
         //TODO: Add timeout.
