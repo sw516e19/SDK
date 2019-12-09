@@ -33,7 +33,7 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 #define GEARING 5
 #define PROJECTILE_TRAVEL_TIME 135 * 1000 //Microseconds
 
-// Enable WCRTA (Worst-case response time analysis)
+// Enable WCRTA (Worst-case response time analysis). This will show debugging information to the console about computation times for tasks.
 #define WCRTA
 
 // Deadlines for the task's period. All times are in microseconds
@@ -277,7 +277,7 @@ void calculate_task(intptr_t unused) {
             
             // If the computation time exceeded its deadline, error and terminate task
             if (compTime > CALCULATE_TASK_PERIOD) {
-                syslog(LOG_NOTICE, "[Task Period Error] Missed detect deadline, computation time: %lu", compTime);
+                syslog(LOG_NOTICE, "[Task Period Error] Missed calculate deadline, computation time: %lu", compTime);
                 ext_tsk();
             }
         }
