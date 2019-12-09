@@ -36,6 +36,12 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 // Enable WCRTA (Worst-case response time analysis)
 #define WCRTA
 
+// Deadlines for the task's period. All times are in microseconds
+#define DETECT_TASK_DEADLINE 16000
+#define CALCULATE_TASK_DEADLINE 16000
+#define SHOOT_TASK_DEADLINE 1000
+
+
 // Global variable for trigger time in microseconds
 uint32_t trigger_time = 90 * 1000;
 
@@ -275,16 +281,12 @@ void shoot_task(intptr_t unused) {
     ER ercd;
     // Initialize the motor
     ev3_motor_config(EV3_PORT_A, LARGE_MOTOR);
-#ifdef WCRTA
     SYSUTM startTime, endTime;
-#endif
 
     while(true) {
         
         ercd = trcv_dtq(CALCDATAQUEUE, &pointer, 2);
-#ifdef WCRTA
         get_utm(&startTime);
-#endif
         new_data = (SYSUTM *)pointer;
         get_utm(&now); 
         if(ercd != E_TMOUT){
@@ -305,11 +307,24 @@ void shoot_task(intptr_t unused) {
         }
         ev3_motor_rotate(EV3_PORT_A, 360 * GEARING, 100, true);
         time_to_shoot = 0;
-#ifdef WCRTA
+
         get_utm(&endTime);
-        syslog(LOG_NOTICE, "[WCRTA] shoo: %lu", endTime - startTime);
+
+        // Calculate the computation time of the task
+        SYSUTM compTime = endTime - startTime;
+
+        // If the computation time exceeded its deadline, error and terminate task
+        if (compTime > SHOOT_TASK_DEADLINE) {
+            syslog(LOG_NOTICE, "[Task Period Error] Missed shoot deadline, computation time: %lu", compTime);
+            ext_tsk();
+        }
+
+#ifdef WCRTA
+        syslog(LOG_NOTICE, "[WCRTA] shoo: %lu", compTime);
 #endif
-        
+
+        // Sleep the task for its period. Divide by 1000 to get the time in milliseconds
+        tslp_tsk(SHOOT_TASK_DEADLINE/1000);
     }
 
 }
