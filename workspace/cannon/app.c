@@ -37,13 +37,19 @@ const double GRAVITY_PIXELS = 2.804285e-09; // Measured in pixels/microsecond. F
 #define WCRTA
 
 // Deadlines for the task's period. All times are in microseconds
-#define DETECT_TASK_DEADLINE 16000
-#define CALCULATE_TASK_DEADLINE 16000
-#define SHOOT_TASK_DEADLINE 1000
+#define DETECT_TASK_PERIOD 16000
+#define CALCULATE_TASK_PERIOD 16000
+#define SHOOT_TASK_PERIOD 1000
+
+// The minimum amount of pictures to get before detect and calculate task are reduced from a periodic task to a soft periodic task
+#define MINIMUM_PICTURE_COUNT 2
 
 
 // Global variable for trigger time in microseconds
 uint32_t trigger_time = 90 * 1000;
+
+uint8_t detect_task_picture_count = 0;
+uint8_t calculate_task_picture_count = 0;
 
 void printshoot_time()
 {
@@ -111,30 +117,26 @@ void detect_task(intptr_t unused) {
 
     pixycam_response.header.payload_length = 0;
     intptr_t output_ptr;
-#ifdef WCRTA
+    
     SYSUTM startTime, endTime;
     SYSUTM startTime2, endTime2;
-    long_t totalDuration;
-#endif
+    long_t compTime;
 
 
     // Begin detect_task loop
     while (true) {
-#ifdef WCRTA
         get_utm(&startTime2);
-#endif
+
         // Call get blocks
         pixycam_2_sendblocks(EV3_PORT_1, signatures, 1); // Time: 0
         
-#ifdef WCRTA
         get_utm(&endTime2);
-#endif
+
         // Sleep to let other tasks do some processing
         while (pixycam_2_fetch_blocks(EV3_PORT_1, &pixycam_response, 1) == 0)
-            tslp_tsk(2);
-#ifdef WCRTA
-        get_utm(&startTime);
-#endif        
+            tslp_tsk(1);
+
+        get_utm(&startTime);      
 
         // If the payload length is 0, no block(s) were detected and the loop should be continued
 
@@ -158,12 +160,29 @@ void detect_task(intptr_t unused) {
 
         pixycam_response.header.payload_length = 0;  
         pixycam_response.blocks[0].signature = -1;   
-#ifdef WCRTA
+
         get_utm(&endTime);
-        totalDuration = (long_t)(endTime - startTime);
-        totalDuration = totalDuration + (long_t)(endTime2 - startTime2);
-        syslog(LOG_NOTICE, "[WCRTA] dect: %lu", totalDuration);
+        compTime = (long_t)(endTime - startTime);
+        compTime = compTime + (long_t)(endTime2 - startTime2);
+        
+        // Check whether the minimum amount of pictures have been reached. If this is not the case, perform hard real-time.
+        if (detect_task_picture_count < MINIMUM_PICTURE_COUNT) {
+            
+            // If the computation time exceeded its deadline, error and terminate task
+            if (compTime > DETECT_TASK_PERIOD) {
+                syslog(LOG_NOTICE, "[Task Period Error] Missed detect deadline, computation time: %lu", compTime);
+                ext_tsk();
+            }
+        }
+
+#ifdef WCRTA
+        syslog(LOG_NOTICE, "[WCRTA] Detect: %lu", compTime);
 #endif
+
+        // Increase the count of pictures
+        ++detect_task_picture_count;
+
+        tslp_tsk((DETECT_TASK_PERIOD-compTime)/1000);
     }
 }
 
@@ -201,16 +220,15 @@ void calculate_task(intptr_t unused) {
 
     intptr_t current_ptr, output_ptr;
     detected_pixycam_block_t *currentdata, *olddata = NULL;
-#ifdef WCRTA
+
     SYSUTM startTime, endTime;
-#endif
+    long_t compTime;
+
 
     while (true) {
         //TODO: Add timeout.
         rcv_dtq(CAMDATAQUEUE, &current_ptr);
-#ifdef WCRTA
         get_utm(&startTime);
-#endif
         
         currentdata = (detected_pixycam_block_t*)current_ptr;
 
@@ -250,23 +268,29 @@ void calculate_task(intptr_t unused) {
             queue_index = 0;
 
         olddata = currentdata;
-#ifdef WCRTA
+
         get_utm(&endTime);
-        syslog(LOG_NOTICE, "[WCRTA] calc: %lu", endTime - startTime);
+        compTime = (long_t)(endTime - startTime);
+
+        // Check whether the minimum amount of pictures have been reached. If this is not the case, perform hard real-time.
+        if (calculate_task_picture_count < MINIMUM_PICTURE_COUNT) {
+            
+            // If the computation time exceeded its deadline, error and terminate task
+            if (compTime > CALCULATE_TASK_PERIOD) {
+                syslog(LOG_NOTICE, "[Task Period Error] Missed detect deadline, computation time: %lu", compTime);
+                ext_tsk();
+            }
+        }
+
+        // Increase the count of pictures
+        ++calculate_task_picture_count;
+
+        tslp_tsk((CALCULATE_TASK_PERIOD-compTime)/1000);
+
+#ifdef WCRTA
+        syslog(LOG_NOTICE, "[WCRTA] Calculate: %lu", compTime);
 #endif
-
-        // 1. Wait for data to be available
-
-        // 2. Grab data from global variable
-
-        // 3. Begin processing on the data from the pixycam
-
-        // 4. Once data has been processed, set when to fire the turret (raise shoot tasks priority?)
     }
-
-
-    // Read data from detect_task, perform calculations and eventually pass shooting request to shoot_task
-
 }
 
 // Fire the cannon, and (hopefully) hit the target
@@ -313,18 +337,21 @@ void shoot_task(intptr_t unused) {
         // Calculate the computation time of the task
         SYSUTM compTime = endTime - startTime;
 
-        // If the computation time exceeded its deadline, error and terminate task
-        if (compTime > SHOOT_TASK_DEADLINE) {
+#ifdef WCRTA
+        syslog(LOG_NOTICE, "[WCRTA] Shoot: %lu", compTime);
+#endif
+
+        // Shoot task is a periodic task. If the computation time exceeded its deadline, error and terminate task
+        if (compTime > SHOOT_TASK_PERIOD) {
             syslog(LOG_NOTICE, "[Task Period Error] Missed shoot deadline, computation time: %lu", compTime);
             ext_tsk();
         }
 
-#ifdef WCRTA
-        syslog(LOG_NOTICE, "[WCRTA] shoo: %lu", compTime);
-#endif
+        detect_task_picture_count = 0;
+        calculate_task_picture_count = 0;
 
         // Sleep the task for its period. Divide by 1000 to get the time in milliseconds
-        tslp_tsk(SHOOT_TASK_DEADLINE/1000);
+        tslp_tsk((SHOOT_TASK_PERIOD-compTime)/1000);
     }
 
 }
