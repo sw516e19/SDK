@@ -66,6 +66,13 @@ extern "C" {
 #define CAMDATAQUEUESIZE 3
 #define CALCDATAQUEUESIZE 2
 
+/**
+ * Task periods in ms
+ */
+#define DETECT_TASK_PERIOD     (16000)
+#define CALCULATE_TASK_PERIOD  (16000)
+#define SHOOT_TASK_PERIOD      (1000)
+
 /*
  *  ターゲットに依存する可能性のある定数の定義
  */
@@ -82,6 +89,10 @@ extern "C" {
  *  関数のプロトタイプ宣言
  */
 #ifndef TOPPERS_MACRO_ONLY
+
+extern void detect_cyc(intptr_t exinf);
+extern void calculate_cyc(intptr_t exinf);
+extern void shoot_cyc(intptr_t exinf);
 
 extern void init_task(intptr_t exinf);
 extern void detect_task(intptr_t exinf);
