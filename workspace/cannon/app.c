@@ -89,8 +89,9 @@ typedef struct {
 detected_pixycam_block_t detected_blocks[CAMDATAQUEUESIZE + 1];
 SYSUTM calculated_deadlines[CALCDATAQUEUESIZE + 1];
 
+// Cyclic handler for detect task
 void detect_cyc(intptr_t unused) {
-
+    iact_tsk(DETECT_TASK);
 }
 
 // Detect an object with the PixyCam and write the block to a buffer to be further processed
@@ -186,8 +187,9 @@ int32_t calculate_fallduration(uint16_t *y0_location, uint16_t *y1_location, SYS
     return round((sqrt(2 * GRAVITY_PIXELS * (POINT_OF_IMPACT - y_0) + pow(v_0, 2)) - v_0) / GRAVITY_PIXELS);
 }
 
+// Cyclic handler for calculate task
 void calculate_cyc(intptr_t unused) {
-    
+    iact_tsk(CALCULATE_TASK);
 }
 
 // Perform calculations on the data that the pixycam detected, and estimate when to shoot the target
@@ -271,8 +273,9 @@ void calculate_task(intptr_t unused) {
 
 }
 
+// Cyclic handler for shoot task
 void shoot_cyc(intptr_t unused) {
-    
+    iact_tsk(SHOOT_TASK);
 }
 
 // Fire the cannon, and (hopefully) hit the target
